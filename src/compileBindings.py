@@ -1,7 +1,8 @@
 #!/usr/bin/python3
 
 import os
-from Common import ocIncludePaths, additionalIncludePaths
+from Common import ocIncludePaths, additionalIncludePaths, compileFlags
+from preamble import preamblePath
 import subprocess
 import multiprocessing
 from functools import partial
@@ -10,51 +11,38 @@ from argparse import ArgumentParser
 
 libraryBasePath = "/opencascade.js/build/bindings"
 
-def buildOneFile(args, item):
-  if not os.path.exists(item + ".o"):
-    print("building " + item)
-    command = [
-      "emcc",
-      "-flto",
-      "-fexceptions",
-      "-sDISABLE_EXCEPTION_CATCHING=0",
-      "-DIGNORE_NO_ATOMICS=1",
-      "-DOCCT_NO_PLUGINS",
-      "-frtti",
-      "-DHAVE_RAPIDJSON",
-      "-Os",
-      # "-g3",
-      # "-gsource-map",
-      # "--source-map-base=http://localhost:8080",
-      "-pthread" if args["threading"] == "multi-threaded" else "",
-      *list(map(lambda x: "-I" + x, ocIncludePaths + additionalIncludePaths)),
-      "-c", item,
-    ]
-    subprocess.check_call([
-      *command,
-      "-o", item + ".o",
-    ])
-  else:
-    print("file " + item + ".o already exists, skipping")
+def buildOneFile(command, item):
+  print("building " + item)
+  subprocess.check_call([*command, "-c", item, "-o", item + ".o"])
+
+def compileBindings(root, threading):
+  filesToBuild = []
+  for dirpath, dirnames, filenames in os.walk(root):
+    dirnames[:] = [x for x in dirnames if not os.path.exists(preamblePath(dirpath + "/" + x))]
+    filesToBuild.extend(dirpath + "/" + x for x in filenames if x.endswith(".cpp") and not os.path.exists(dirpath + "/" + x + ".o"))
+  if len(filesToBuild) == 0:
+    return
+
+  command = [
+    "emcc",
+    *compileFlags(threading),
+    *list(map(lambda x: "-I" + x, ocIncludePaths + additionalIncludePaths)),
+  ]
+  pch = preamblePath(root) + "." + threading + ".pch"
+  print("building " + pch)
+  subprocess.check_call([*command, "-x", "c++-header", preamblePath(root), "-o", pch])
+  try:
+    with multiprocessing.Pool() as p:
+      p.map(partial(buildOneFile, [*command, "-include-pch", pch]), sorted(filesToBuild))
+  finally:
+    os.remove(pch)
 
 def compileCustomCodeBindings(args):
-  filesToBuild = []
-  for dirpath, dirnames, filenames in os.walk(libraryBasePath + "/myMain.h"):
-    filesToBuild.extend(map(lambda x: dirpath + "/" + x, filter(lambda x: x.endswith(".cpp"), filenames)))
-
-  with multiprocessing.Pool(processes=int(multiprocessing.cpu_count() / 1)) as p:
-    p.map(partial(buildOneFile, args), sorted(filesToBuild))
+  compileBindings(libraryBasePath + "/myMain.h", args["threading"])
 
 if __name__ == "__main__":
   parser = ArgumentParser()
   parser.add_argument(dest="threading", choices=["single-threaded", "multi-threaded"], help="Build in single vs. multi-threaded mode")
   args = parser.parse_args()
 
-  filesToBuild = []
-  for dirpath, dirnames, filenames in os.walk(libraryBasePath):
-    filesToBuild.extend(map(lambda x: dirpath + "/" + x, filter(lambda x: x.endswith(".cpp"), filenames)))
-
-  with multiprocessing.Pool(processes=int(multiprocessing.cpu_count() / 1)) as p:
-    p.map(partial(buildOneFile, {
-      "threading": args.threading,
-    }), sorted(filesToBuild))
+  compileBindings(libraryBasePath, args.threading)

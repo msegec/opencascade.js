@@ -45,12 +45,10 @@ Custom builds are defined using YAML files. One YAML file can contain multiple m
         emccFlags:
           - -O3
           - -sEXPORT_ES6=1
-          - -sUSE_ES6_IMPORT_META=0
           - -sEXPORTED_RUNTIME_METHODS=['FS']
           - -sINITIAL_MEMORY=100MB
           - -sMAXIMUM_MEMORY=4GB
           - -sALLOW_MEMORY_GROWTH=1
-          - -sUSE_FREETYPE=1
       additionalCppCode: |
         #include <iostream>
         class CustomClass {
@@ -69,7 +67,7 @@ Custom builds are defined using YAML files. One YAML file can contain multiple m
 
     * Add the additional C++ Code from the field `additionalCppCode` into the C++ file, which is used for the build (the code will be placed after all include statements and before the `EMSCRIPTEN_BINDINGS` block). In order for the build system to expose this C++ code to JavaScript, it needs to be class-based (the build system currently cannot handle plain functions) and you must add the class name to the bindings object (in the example above, by specifying `symbol: CustomClass`).
 
-    You can specify custom compilation flags using the `emccFlags` property (as an array) under the `mainBuild` property. See [here](https://github.com/emscripten-core/emscripten/blob/master/src/settings.js) for a complete list of settings. This property is optional and not specifying it will use the default values, used by the official OpenCascade.js build. `-sEXPORT_ES6=1` and `-sUSE_ES6_IMPORT_META=0` produce a ES6 module (as opposed to a UMD module), which should work nicely with most browser-based workflows. `-sEXTRA_EXPORTED_RUNTIME_METHODS=["FS"]` adds support for Emscripten's virtual file system. `-O3` is used to create an optimized build.
+    You can specify custom compilation flags using the `emccFlags` property (as an array) under the `mainBuild` property. See [here](https://github.com/emscripten-core/emscripten/blob/master/src/settings.js) for a complete list of settings. This property is optional and not specifying it will use the default values, used by the official OpenCascade.js build. `-sEXPORT_ES6=1` produces an ES6 module (as opposed to a UMD module), which should work nicely with most browser-based workflows. `-sEXTRA_EXPORTED_RUNTIME_METHODS=["FS"]` adds support for Emscripten's virtual file system. `-O3` is used to create an optimized build.
 
     Using `-O3` optimizations, Emscripten is able to perform dead code elimination. This results in very small binary sizes without the need to manually specify which OpenCascade sources to include during the build process.
 

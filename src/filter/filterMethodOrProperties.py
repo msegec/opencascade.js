@@ -13,6 +13,15 @@ def filterMethodOrProperty(theClass, methodOrProperty):
   if theClass.spelling == "AppDef_MultiLine" and methodOrProperty.spelling == "SetParameter":
     return False
 
+  # error: undefined symbol: TCollection_AsciiString::IsEqual(TCollection_AsciiString const&, char const*)
+  if (
+    theClass.spelling == "TCollection_AsciiString" and
+    methodOrProperty.spelling == "IsEqual" and
+    methodOrProperty.is_static_method() and
+    list(methodOrProperty.get_arguments())[1].type.kind == clang.cindex.TypeKind.POINTER
+  ):
+    return False
+
   # error: overload of method DN has no implementation
   if theClass.spelling == "BSplCLib" and methodOrProperty.spelling == "DN":
     return False
@@ -122,6 +131,49 @@ def filterMethodOrProperty(theClass, methodOrProperty):
       "Is2dText",
     ]
   ):
+    return False
+
+  # error: call to deleted constructor of 'X' (move constructor of a class whose copy constructor is deleted)
+  if (
+    methodOrProperty.kind == clang.cindex.CursorKind.CONSTRUCTOR and
+    methodOrProperty.is_move_constructor() and
+    any(x.is_copy_constructor() and x.is_deleted_method() for x in theClass.get_children())
+  ):
+    return False
+
+  # error: call to deleted constructor of 'X' / call to implicitly-deleted copy constructor of 'X' (returns a non-copyable type)
+  if \
+    (theClass.spelling == "DE_Wrapper" and methodOrProperty.spelling == "GlobalLoadMutex") or \
+    (theClass.spelling == "BRepGraphInc_Storage" and methodOrProperty.spelling == "CurrentShapesMutex") or \
+    (theClass.spelling == "TopOpeBRep_DSFiller" and methodOrProperty.spelling == "ChangeShapeIntersector") or \
+    (theClass.spelling == "TopOpeBRep_DSFiller" and methodOrProperty.spelling == "ChangeShapeIntersector2d") or \
+    (theClass.spelling == "TopOpeBRep_ShapeIntersector" and methodOrProperty.spelling == "ChangeFaceEdgeIntersector") or \
+    (theClass.spelling == "BRepClass3d_SolidExplorer" and methodOrProperty.spelling == "Intersector") or \
+    (theClass.spelling == "BRepMesh_Delaun" and methodOrProperty.spelling == "Circles") or \
+    (theClass.spelling == "BRepTopAdaptor_FClass2d" and methodOrProperty.spelling == "Copy") or \
+    (theClass.spelling == "BRepGraph" and methodOrProperty.spelling in ["LayerRegistry", "CacheRegistry"]) or \
+    (theClass.spelling == "BRepGraph_CopyRemap" and methodOrProperty.spelling in ["SourceGraph", "TargetGraph", "TargetGraphConst"]) or \
+    (theClass.spelling == "BRepGraph_Data" and methodOrProperty.spelling in ["myIncStorage", "myLayerRegistry", "myCacheRegistry"]) or \
+    (theClass.spelling.startswith("ExtremaPC_") and methodOrProperty.spelling in ["Perform", "PerformWithEndpoints", "Result"]):
+    return False
+
+  # error: non-const lvalue reference to type 'BRepExtrema_ProximityDistTool::ProxPnt_Status' cannot bind to a temporary of type 'BRepExtrema_ProximityDistTool::ProxPnt_Status'
+  if theClass.spelling == "BRepExtrema_ProximityValueTool" and methodOrProperty.spelling == "ProximityPointsStatus":
+    return False
+
+  # error: unknown type name 'Operation'; did you mean 'ShapeProcess::Operation'?
+  if theClass.spelling == "ShapeProcess" and methodOrProperty.spelling == "ToOperationFlag":
+    return False
+
+  # error: expected ')' (constructor takes array references)
+  if theClass.spelling == "BRepMesh_Triangle" and methodOrProperty.spelling == "BRepMesh_Triangle":
+    return False
+
+  # error: expected expression (constructor has an unnamed argument)
+  if theClass.spelling == "Select3D_SensitiveCircle" and methodOrProperty.spelling == "Select3D_SensitiveCircle":
+    return False
+
+  if methodOrProperty.is_deleted_method():
     return False
 
   if methodOrProperty.access_specifier == clang.cindex.AccessSpecifier.PUBLIC and methodOrProperty.kind == clang.cindex.CursorKind.USING_DECLARATION:
@@ -303,8 +355,15 @@ def filterMethodOrProperty(theClass, methodOrProperty):
   if (
     theClass.spelling == "XCAFDoc_GeomTolerance" and
     methodOrProperty.kind == clang.cindex.CursorKind.CONSTRUCTOR and
-    methodOrProperty.type.spelling == "void (const opencascade::handle<XCAFDoc_GeomTolerance> &)"
+    methodOrProperty.type.spelling in [
+      "void (const opencascade::handle<XCAFDoc_GeomTolerance> &)",
+      "void (const occ::handle<XCAFDoc_GeomTolerance> &)",
+    ]
   ):
+    return False
+
+  # error: undefined symbol: BRepBlend_CSWalking::IsDone() const / BRepBlend_CSWalking::Line() const
+  if theClass.spelling == "BRepBlend_CSWalking" and methodOrProperty.spelling in ["IsDone", "Line"]:
     return False
 
   return True

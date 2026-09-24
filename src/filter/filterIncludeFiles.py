@@ -2,45 +2,8 @@ def filterIncludeFile(filename):
   if not filename.endswith(".hxx"):
     return False
 
-  # fatal error: 'AIS_LocalStatus.hxx' file not found
-  if (
-    filename == "AIS_DataMapOfSelStat.hxx" or
-    filename == "AIS_DataMapIteratorOfDataMapOfSelStat.hxx"
-  ):
-    return False
-
-  # fatal error: 'X11/Xlib.h' file not found
-  if (
-    filename == "InterfaceGraphic.hxx"
-  ):
-    return False
-
-  # fatal error: 'X11/XWDFile.h' file not found
-  if filename == "Aspect_XWD.hxx":
-    return False
-
   # fatal error: 'X11/Shell.h' file not found
   if filename == "IVtkDraw_Interactor.hxx":
-    return False
-
-  # error: use of undeclared identifier 'myBoxes' / error: use of undeclared identifier 'myElements'
-  if filename == "BVH_IndexedBoxSet.hxx":
-    return False
-
-  # error: "Atomic operation isn't implemented for current platform!"
-  if (
-    filename == "BOPDS_Iterator.hxx" or
-    filename == "BOPDS_IteratorSI.hxx" or
-    filename == "BOPTools_BoxTree" or
-    filename == "BOPTools_BoxTree.hxx" or
-    filename == "BVH_LinearBuilder.hxx" or
-    filename == "BVH_RadixSorter.hxx" or
-    filename == "OSD_Parallel.hxx" or
-    filename == "OSD_ThreadPool.hxx" or
-    filename == "Standard_Atomic.hxx" or
-    filename == "BOPTools_Parallel.hxx" or
-    filename == "BVH_DistanceField.hxx"
-  ):
     return False
 
   # fatal error: 'vtkType.h' file not found
@@ -82,8 +45,23 @@ def filterIncludeFile(filename):
   if filename == "IVtkDraw_HighlightAndSelectionPipeline.hxx":
     return False
 
-  # error: expected member name or ';' after declaration specifiers
-  if filename == "math_Householder.hxx":
+  # error: typedef redefinition with different types (GL_APIENTRY undefined; no OCCT file includes this header)
+  if filename == "OpenGl_GLESExtensions.hxx":
+    return False
+
+  # error: no member named 'NbIterations' in 'MathLin::EigenResult' (MathLin_EigenSearch.hxx shadows MathUtils::EigenResult; only one .cxx includes this header)
+  if filename == "MathLin_Jacobi.hxx":
+    return False
+
+  # fatal error: 'BOPDS_ListOfPaveBlock.hxx' file not found (also Graphic3d_MapOfStructure.hxx, TObj_SequenceOfObject.hxx; OCCT 8 deprecated aliases for removed headers)
+  if filename in [
+    "BOPDS_DataMapOfIntegerListOfPaveBlock.hxx",
+    "BOPDS_DataMapOfPaveBlockListOfPaveBlock.hxx",
+    "BOPDS_IndexedDataMapOfPaveBlockListOfPaveBlock.hxx",
+    "BOPDS_VectorOfListOfPaveBlock.hxx",
+    "Graphic3d_MapIteratorOfMapOfStructure.hxx",
+    "TObj_Container.hxx",
+  ]:
     return False
 
   return True

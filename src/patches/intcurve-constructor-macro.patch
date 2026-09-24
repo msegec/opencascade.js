@@ -1,0 +1,9 @@
+diff -ruN /occt-original/src/ModelingAlgorithms/TKGeomAlgo/IntCurve/IntCurve_IntConicConic.lxx /occt/src/ModelingAlgorithms/TKGeomAlgo/IntCurve/IntCurve_IntConicConic.lxx
+--- /occt-original/src/ModelingAlgorithms/TKGeomAlgo/IntCurve/IntCurve_IntConicConic.lxx
++++ /occt/src/ModelingAlgorithms/TKGeomAlgo/IntCurve/IntCurve_IntConicConic.lxx
+@@ -196,3 +196,5 @@
+   SetReversedParameters(false);
+   Perform(C1, D1, C2, D2, TolConf, Tol);
+ }
++
++#undef CONSTRUCTOR

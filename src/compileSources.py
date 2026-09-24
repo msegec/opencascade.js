@@ -1,8 +1,10 @@
 #!/usr/bin/python3
 
 import os
+import re
 import subprocess
 import multiprocessing
+from Common import compileFlags, additionalIncludePaths
 
 from filter.filterSourceFiles import filterSourceFile
 from filter.filterPackages import filterPackages
@@ -35,12 +37,7 @@ libraryBasePath = "/opencascade.js/build/sources"
 
 sourceBasePath = "/occt/src/"
 
-includePaths = []
-includePaths.extend([
-  "/rapidjson/include",
-  "/freetype/include/freetype",
-  "/freetype/include",
-])
+includePaths = list(additionalIncludePaths)
 for dirpath, dirnames, filenames in os.walk(os.path.join(sourceBasePath)):
   includePaths.append(dirpath)
 
@@ -52,19 +49,7 @@ def buildObjectFiles(file, args):
     pass
   command = [
     "emcc",
-    "-flto",
-    "-fexceptions",
-    "-sDISABLE_EXCEPTION_CATCHING=0",
-    "-DIGNORE_NO_ATOMICS=1",
-    "-DOCCT_NO_PLUGINS",
-    "-frtti",
-    "-DHAVE_RAPIDJSON", 
-    "-Os",
-    # "-g3",
-    # "-gsource-map",
-    # "--source-map-base=http://localhost:8080",
-    # "-fPIC",
-    "-pthread" if args["threading"] == "multi-threaded" else "",
+    *compileFlags(args["threading"]),
     *list(map(lambda x: "-I" + x, includePaths)),
     "-c",
     file,
@@ -81,13 +66,10 @@ def buildObjectFiles(file, args):
 
 allModules = {}
 for dirpath, dirnames, filenames in os.walk(sourceBasePath):
-  if not any(x for x in filenames if x == "PACKAGES"):
+  if not "PACKAGES.cmake" in filenames:
     continue
-  allModules[os.path.basename(dirpath)] = []
-  with open(dirpath + "/PACKAGES", "r") as a_file:
-    for package in a_file:
-      packageName = package.strip()
-      allModules[os.path.basename(dirpath)].append(packageName)
+  with open(dirpath + "/PACKAGES.cmake", "r") as a_file:
+    allModules[os.path.basename(dirpath)] = [os.path.basename(x) for x in re.findall(r"^\s+([\w./]+)\s*$", a_file.read(), re.MULTILINE)]
 def getModuleNameByPackageName(inputPackageName):
   for moduleName in allModules:
     for package in allModules[moduleName]:

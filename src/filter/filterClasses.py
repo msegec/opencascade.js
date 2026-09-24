@@ -44,10 +44,6 @@ def filterClass(theClass, additionalInfo=None):
   if theClass.spelling == "CDF_DirectoryIterator":
     return False
 
-  # error: undefined symbol: _ZN15Geom2dEvaluator16AdjustDerivativeEidR8gp_Vec2dS1_S1_S1_ (referenced by top-level compiled C/C++ code)
-  if theClass.spelling == "Geom2dEvaluator":
-    return False
-
   # error: allocating an object of abstract class type 'PrsDim_Dimension'
   if theClass.spelling == "PrsDim_Dimension":
     return False
@@ -55,12 +51,6 @@ def filterClass(theClass, additionalInfo=None):
   # error: rvalue reference to type 'Storage_BaseDriver' cannot bind to lvalue of type 'Storage_BaseDriver'
   # error: allocating an object of abstract class type 'Storage_BaseDriver'
   if theClass.spelling == "FSD_BinaryFile":
-    return False
-
-  # error: calling a private constructor of class 'Standard_Mutex'
-  # error: 'operator new' is a protected member of 'Standard_Transient'
-  # error: 'operator delete' is a protected member of 'Standard_Transient'
-  if theClass.spelling == "Font_BRepFont":
     return False
 
   # error: 'operator delete' is a protected member of 'Message_ProgressScope'
@@ -160,10 +150,6 @@ def filterClass(theClass, additionalInfo=None):
 
   # error: incomplete type 'Interface_GTool' used in type trait expression
   if theClass.spelling == "Interface_Graph":
-    return False
-  
-  # error: 'operator delete' is a protected member of 'Standard_Transient'
-  if theClass.spelling == "Font_BRepFont":
     return False
   
   if theClass.spelling == "HLRBRep_CLProps":
@@ -285,28 +271,13 @@ def filterClass(theClass, additionalInfo=None):
   if theClass.spelling.startswith("Media"):
     return False
 
-  # error: incomplete type 'Interface_ShareTool' used in type trait expression
-  if theClass.spelling == "RWStepAP214_GeneralModule":
-    return False
-
-  # error: constexpr variable 'types' must be initialized by a constant expression
-  if (
-    theClass.spelling == "RWStepShape_RWBrepWithVoids" or
-    theClass.spelling == "RWStepShape_RWEdgeCurve" or
-    theClass.spelling == "RWStepShape_RWEdgeLoop" or
-    theClass.spelling == "RWStepShape_RWFaceBound"
-  ):
-    return False
-
   if (
     theClass.spelling == "LocOpe_Revol" or
-    theClass.spelling == "QANCollection" or
     theClass.spelling == "MAT2d_CutCurve" or
     theClass.spelling == "Law_Interpolate" or
     theClass.spelling == "LocOpe_RevolutionForm" or
     theClass.spelling == "MeshTest_CheckTopology" or
     theClass.spelling == "ProjLib_ProjectOnSurface" or
-    theClass.spelling == "QABugs_PresentableObject" or
     theClass.spelling == "QABugs" or
     theClass.spelling == "QADraw" or
     theClass.spelling == "MeshTest" or
@@ -353,10 +324,6 @@ def filterClass(theClass, additionalInfo=None):
   if theClass.spelling == "StepData_GeneralModule":
     return False
 
-  # error: constexpr variable 'types' must be initialized by a constant expression
-  if theClass.spelling == "TopClass_SolidExplorer":
-    return False
-
   # error: calling function with incomplete return type 'OSD_FileIterator'
   # error: constexpr variable 'types' must be initialized by a constant expression
   if theClass.spelling == "UTL":
@@ -396,15 +363,7 @@ def filterClass(theClass, additionalInfo=None):
     return False
 
   # error: expected unqualified-id
-  if (
-    theClass.spelling == "math_IntegerVector" or
-    theClass.spelling == "math_Matrix" or
-    theClass.spelling == "math_Vector"
-  ):
-    return False
-
-  # error: allocating an object of abstract class type 'AIS_Dimension'
-  if theClass.spelling == "AIS_Dimension":
+  if theClass.spelling == "math_Matrix":
     return False
 
   # error: undefined symbol
@@ -428,6 +387,26 @@ def filterClass(theClass, additionalInfo=None):
   if theClass.spelling in [
     "StepKinematics_UnconstrainedPair",
     "StepKinematics_UnconstrainedPairValue"
+  ]:
+    return False
+
+  # error: static assertion failed due to requirement '!std::is_pointer<HLRBRep_Surface *>::value': Implicitly binding raw pointers is illegal.
+  if theClass.spelling == "HLRBRep_TheCSFunctionOfInterCSurf":
+    return False
+
+  # error: incomplete type 'BRepGraph_CacheMesh::Slot' used in type trait expression
+  # error: call to implicitly-deleted default constructor of 'BRepGraph_FacesOfEdge' / 'BRepGraph_WiresOfEdge'
+  # error: use of undeclared identifier 'EditorView' (nested BRepGraph classes defined out of line)
+  if theClass.spelling in [
+    "BRepGraph_CacheMesh",
+    "BRepGraph_FacesOfEdge",
+    "BRepGraph_WiresOfEdge",
+    "EditorView",
+    "MeshView",
+    "RefsView",
+    "ShapesView",
+    "TopoView",
+    "UIDsView",
   ]:
     return False
 

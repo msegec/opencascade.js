@@ -1,4 +1,25 @@
-{
+from Common import codegenFlags
+
+emccFlags = {
+  "required": False,
+  "type": "list",
+  "schema": {
+    "type": "string",
+  },
+  "default": [
+    *codegenFlags,
+    "-Wl,-mllvm,-wasm-enable-eh",
+    "-sEXPORT_ES6=1",
+    "-sEXPORTED_RUNTIME_METHODS=['FS','HEAP8','HEAPU8','getExceptionMessage','getCppExceptionThrownObjectFromWebAssemblyException','decrementExceptionRefcount']",
+    "-sINITIAL_MEMORY=100MB",
+    "-sMAXIMUM_MEMORY=4GB",
+    "-sALLOW_MEMORY_GROWTH=1",
+    "-sSTACK_SIZE=5MB",
+    "--no-entry",
+  ],
+}
+
+schema = {
   "mainBuild": {
     "required": True,
     "type": "dict",
@@ -17,28 +38,7 @@
         },
         "default": [],
       },
-      "emccFlags": {
-        "required": False,
-        "type": "list",
-        "schema": {
-          "type": "string",
-        },
-        "default": [
-          "-flto",
-          "-fexceptions",
-          "-sDISABLE_EXCEPTION_CATCHING=0",
-          "-O3",
-          "-sEXPORT_ES6=1",
-          "-sUSE_ES6_IMPORT_META=0",
-          "-sEXPORTED_RUNTIME_METHODS=['FS']",
-          "-sINITIAL_MEMORY=100MB",
-          "-sMAXIMUM_MEMORY=4GB",
-          "-sALLOW_MEMORY_GROWTH=1",
-          "-sUSE_FREETYPE=1",
-          "-sLLD_REPORT_UNDEFINED",
-          "--no-entry",
-        ],
-      },
+      "emccFlags": emccFlags,
       "name": {
         "required": True,
         "type": "string",
@@ -54,50 +54,32 @@
     "required": False,
     "type": "list",
     "schema": {
-      "bindings": {
-        "required": False,
-        "type": "list",
-        "schema": {
-          "type": "dict",
+      "type": "dict",
+      "schema": {
+        "bindings": {
+          "required": False,
+          "type": "list",
           "schema": {
-            "symbol": {
-              "required": True,
-              "type": "string",
+            "type": "dict",
+            "schema": {
+              "symbol": {
+                "required": True,
+                "type": "string",
+              },
             },
           },
+          "default": [],
         },
-        "default": [],
-      },
-      "emccFlags": {
-        "required": False,
-        "type": "list",
-        "schema": {
+        "emccFlags": emccFlags,
+        "additionalBindCode": {
+          "required": False,
+          "type": "string",
+          "default": "",
+        },
+        "name": {
+          "required": True,
           "type": "string",
         },
-        "default": [
-          "-flto",
-          "-fexceptions",
-          "-sDISABLE_EXCEPTION_CATCHING=0",
-          "-O3",
-          "-sEXPORT_ES6=1",
-          "-sUSE_ES6_IMPORT_META=0",
-          "-sEXPORTED_RUNTIME_METHODS=['FS']",
-          "-sINITIAL_MEMORY=100MB",
-          "-sMAXIMUM_MEMORY=4GB",
-          "-sALLOW_MEMORY_GROWTH=1",
-          "-sUSE_FREETYPE=1",
-          "-sLLD_REPORT_UNDEFINED",
-          "--no-entry",
-        ],
-      },
-      "additionalBindCode": {
-        "required": False,
-        "type": "string",
-        "default": "",
-      },
-      "name": {
-        "required": True,
-        "type": "string",
       },
     },
     "default": [],

@@ -6,28 +6,15 @@ def filterTypedef(typedef, additionalInfo=None):
   ]:
     return False
 
-  if typedef.spelling == "Handle_Cocoa_Window":
-    return False
-
   # error: ?
   if (
-    typedef.spelling == "Handle_Font_BRepFont" or
     typedef.spelling == "Handle_PCDM_Reader" or
     typedef.spelling == "Handle_PCDM_ReadWriter_1"
   ):
     return False
 
-  # Generates error "Cannot register type 'TColQuantity_Array1OfLength' twice" during initialization of the WASM file. Seems to be conflicting with 'TColStd_Array1OfReal'. Can be reproduced by including these two bindings in one bindings-file.
-  if typedef.spelling == "TColQuantity_Array1OfLength":
-    return False
-  # Same as above, but with TopoDS_ListOfShape / TopTools_ListOfShape
-  if typedef.spelling == "TopoDS_ListOfShape":
-    return False
-  # Same as above, but with Handle_Graphic3d_Structure / Handle_Prs3d_Presentation
+  # Cannot register type 'Handle_Graphic3d_Structure' twice, conflicting with Handle_Prs3d_Presentation
   if typedef.spelling == "Handle_Graphic3d_Structure":
-    return False
-  # Cannot register type 'PCDM_BaseDriverPointer' twice
-  if typedef.spelling == "PCDM_BaseDriverPointer":
     return False
 
   # error: unknown type name 'Handle_Xw_Window'; did you mean 'Handle_Cocoa_Window'?
@@ -54,15 +41,6 @@ def filterTypedef(typedef, additionalInfo=None):
   if typedef.spelling == "TopOpeBRepTool_IndexedDataMapOfSolidClassifier":
     return False
 
-  # error: unknown type name 'Type'; did you mean 'rapidjson::Type'?
-  if typedef.spelling in [
-    "NCollection_Utf8Iter",
-    "NCollection_Utf16Iter",
-    "NCollection_Utf32Iter",
-    "NCollection_UtfWideIter",
-  ]:
-    return False
-
   # error: 'NCollection_UBTreeFiller' is not a class, namespace, or enumeration
   if typedef.spelling == "Extrema_UBTreeFillerOfSphere":
     return False
@@ -72,13 +50,6 @@ def filterTypedef(typedef, additionalInfo=None):
   if typedef.spelling in [
     "Graphic3d_Mat4",
     "Graphic3d_Mat4d"
-  ]:
-    return False
-
-  # error: call to implicitly-deleted copy constructor of 'NCollection_SparseArray<int>'
-  if typedef.spelling in [
-    "TObj_TIntSparseArray_VecOfData",
-    "TObj_TIntSparseArray_MapOfData"
   ]:
     return False
 
@@ -134,14 +105,25 @@ def filterTypedef(typedef, additionalInfo=None):
   ]:
     return False
 
-  # error: no matching function for call to 'select_overload'
-  if typedef.spelling == "OpenGl_ListOfStructure":
-    return False
-
   # BindingError: Cannot register type 'gp_Vec2f' twice / BindingError: Cannot register type 'gp_Vec3f' twice / ...
   if typedef.spelling in [
     "Graphic3d_Vec2",
     "Graphic3d_Vec3",
+  ]:
+    return False
+
+  # error: cannot initialize a parameter of type 'Standard_Transient *' with an lvalue of type 'math_NotSquare *'
+  if typedef.spelling in [
+    "Handle_math_NotSquare",
+    "Handle_math_SingularMatrix",
+  ]:
+    return False
+
+  # error: no matching function for call to 'select_overload' (item type is void *)
+  if typedef.spelling in [
+    "BRepClass3d_MapOfInter",
+    "TColStd_SequenceOfAddress",
+    "TopTools_IndexedDataMapOfShapeAddress",
   ]:
     return False
 

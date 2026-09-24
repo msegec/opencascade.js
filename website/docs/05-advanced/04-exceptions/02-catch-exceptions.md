@@ -2,37 +2,38 @@
 sidebar_position: 2
 ---
 
-# Let's catch Some Exceptions
+# Catch exceptions
 
-Several OpenCascade APIs perform basic sanity checks on input parameters, like `BRepPrimAPI_MakeCone`. When calling it's constructor with a height of zero for example, OpenCascade would throw a exception of type `Standard_Failure` with additional information about the error.
+Several OpenCascade APIs perform basic sanity checks on input parameters, like `BRepPrimAPI_MakeCone`. When calling it's constructor with a height of zero for example, OpenCascade would throw a `Standard_DomainError`, a subclass of `Standard_Failure`, with additional information about the error.
 
 ```js title="Input:"
 const disc = new oc.BRepPrimAPI_MakeCone_1(1, 0, 0);
 ```
 ```_ title="Output:"
-thrown: 18476736
+thrown: [object WebAssembly.Exception]
 ```
 
-We can catch this exception in JavaScript, simple by wrapping it with a `try...catch` block. However, the thrown value is represented as a number and does not contain any meaningful information about the error.
+We can catch this exception in JavaScript, simple by wrapping it with a `try...catch` block. However, the thrown value is a `WebAssembly.Exception` and does not contain any meaningful information about the error.
 
-## Extracting Exception Data
+## Extract exception data
 
-What gets thrown is actually a pointer into a point into memory that contains the actual exception data. To extract this information, we have to convert the pointer into a real object. OpenCascade.js provides a helper function `OCJS.getStandard_FailureData` which takes the exception pointer as an argument and returns an instance of `Standard_Failure`, which is generally used by OpenCascade when throwing exceptions.
+`getExceptionMessage` takes the caught exception and returns the C++ type name and the `what()` message. Call `decrementExceptionRefcount` when you are done, or the exception object leaks.
 
 ```js title="Input:"
 try {
   const disc = new oc.BRepPrimAPI_MakeCone_1(1, 0, 0);
 } catch (e) {
-  if(typeof e === "number") {
-    const exceptionData = oc.OCJS.getStandard_FailureData(e);
-    console.log(`That didn't work because: ${exceptionData.GetMessageString()}`);
+  if (e instanceof WebAssembly.Exception) {
+    const [type, message] = oc.getExceptionMessage(e);
+    oc.decrementExceptionRefcount(e);
+    console.log(`That didn't work because: ${type}: ${message}`);
   } else {
-    console.log("Unkown error");
+    console.log("Unknown error");
   }
 }
 ```
 ```_ title="Output:"
-That didn't work because: cone with negative or null height
+That didn't work because: Standard_DomainError: cone with negative or null height
 ```
 
 You can now react to the error, show it to your user and potentially retry the execution.
@@ -43,7 +44,7 @@ Because of it's impact on file size and runtime performance, exception catching 
 
 :::
 
-## Additional Resources
+## Additional resources
 
 * [Emscripten Docs: General information on exceptions](https://emscripten.org/docs/porting/exceptions.html)
 * [Emscripten Docs: How to catch and convert exception pointers](https://emscripten.org/docs/porting/Debugging.html#handling-c-exceptions-from-javascript)

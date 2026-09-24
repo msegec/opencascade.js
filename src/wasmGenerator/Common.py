@@ -1,4 +1,5 @@
 import clang.cindex
+from functools import lru_cache
 
 class SkipException(Exception):
   pass
@@ -6,19 +7,24 @@ class SkipException(Exception):
 def getPureVirtualMethods(theClass):
   return list(filter(lambda x: x.is_pure_virtual_method(), list(theClass.get_children())))
 
-def isAbstractClass(theClass, tu):
-  allClasses = list(filter(lambda x:
-    (
+@lru_cache(maxsize=1)
+def classDefinitions(tu):
+  allClasses = {}
+  for x in tu.cursor.get_children():
+    if (
       x.kind == clang.cindex.CursorKind.CLASS_DECL or
       x.kind == clang.cindex.CursorKind.STRUCT_DECL
-    ) and
-    not (
+    ) and not (
       x.get_definition() is None or
       not x == x.get_definition()
-    ),
-    tu.cursor.get_children()))
+    ):
+      allClasses.setdefault(x.spelling, x)
+  return allClasses
+
+def isAbstractClass(theClass, tu):
+  allClasses = classDefinitions(tu)
   baseSpec = list(filter(lambda x: x.kind == clang.cindex.CursorKind.CXX_BASE_SPECIFIER and x.access_specifier == clang.cindex.AccessSpecifier.PUBLIC, list(theClass.get_children())))
-  baseClasses = list(map(lambda y: next((x for x in allClasses if x.spelling == y.type.spelling)), baseSpec))
+  baseClasses = [allClasses[x.type.spelling] for x in baseSpec if x.type.spelling in allClasses]
 
   pureVirtualMethods = getPureVirtualMethods(theClass)
   if len(pureVirtualMethods) > 0:
@@ -36,37 +42,10 @@ def isAbstractClass(theClass, tu):
   
   return numPureVirtualMethods > numImplementedPureVirtualMethods
 
-def shouldProcessClass(child, headerFiles, filterClass):
-  if child.get_definition() is None or not child == child.get_definition():
-    return False
-
-  if not filterClass(child):
-    return False
-
-  if (
-    child.kind == clang.cindex.CursorKind.CLASS_DECL or
-    child.kind == clang.cindex.CursorKind.STRUCT_DECL
-  ) and not child.type.get_num_template_arguments() == -1:
-    print("Cannot handle template classes (must be typedef'd): " + child.spelling)
-    return False
-
-  if (
-    child.kind == clang.cindex.CursorKind.CLASS_DECL or
-    child.kind == clang.cindex.CursorKind.STRUCT_DECL
-  ):
-    baseSpec = list(filter(lambda x: x.kind == clang.cindex.CursorKind.CXX_BASE_SPECIFIER and x.access_specifier == clang.cindex.AccessSpecifier.PUBLIC, child.get_children()))
-    if len(baseSpec) > 1:
-      print("cannot handle multiple base classes (" + child.spelling + ")")
-      return False
-    
-    return True
-    
-  return False
-
 def getMethodOverloadPostfix(theClass, method, children = None):
   if children == None:
     children = theClass.get_children() 
-  allOverloads = [m for m in children if m.spelling == method.spelling]
+  allOverloads = [m for m in children if m.spelling == method.spelling and not m.is_deleted_method()]
   overloadPostfix = "" if (not len(allOverloads) > 1) else "_" + str(allOverloads.index(method) + 1)
 
   return [overloadPostfix, len(allOverloads)]
@@ -145,9 +124,25 @@ def ignoreDuplicateTypedef(typedef):
   # ----> Graphic3d_Vec4d
   # ----> SelectMgr_Vec4
   if (
-    typedef.underlying_typedef_type.spelling == "NCollection_Vec4<Standard_Real>" and
+    typedef.underlying_typedef_type.spelling in ["NCollection_Vec4<Standard_Real>", "NCollection_Vec4<double>"] and
     typedef.spelling in ["SelectMgr_Vec4"]
   ):
+    return True
+
+  # BindingError: Cannot register type 'X' twice (OCCT 8 aliases share one type; keep the name the typedef map picks)
+  if typedef.spelling in [
+    "BinMDF_StringIdMap",
+    "CDM_NamesDirectory",
+    "Interface_IndexedMapOfAsciiString",
+    "Storage_PType",
+    "TopTools_MapOfOrientedShape",
+  ]:
+    return True
+
+  # --> NCollection_DynamicArray<gp_XYZ>
+  # ----> VectorOfPoint (BRepBuilderAPI_VertexInspector.hxx)
+  # ----> VectorOfPoint (BRepExtrema_ProximityValueTool.hxx)
+  if typedef.spelling == "VectorOfPoint" and typedef.location.file.name.endswith("BRepExtrema_ProximityValueTool.hxx"):
     return True
 
   # --> NCollection_Mat4<Standard_Real>

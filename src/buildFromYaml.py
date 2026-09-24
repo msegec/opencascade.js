@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import os
+import re
 import subprocess
 import json
 from itertools import chain
@@ -10,7 +11,8 @@ from compileBindings import compileCustomCodeBindings
 import shutil
 from cerberus import Validator
 from argparse import ArgumentParser
-from Common import ocIncludePaths, additionalIncludePaths
+from Common import ocIncludePaths, additionalIncludePaths, compileFlags, threadingFlags
+from customBuildSchema import schema
 
 parser = ArgumentParser()
 parser.add_argument(dest="filename", help="Custom build input file (.yml)", metavar="FILE.yml")
@@ -19,7 +21,6 @@ args = parser.parse_args()
 libraryBasePath = "/opencascade.js/build"
 
 buildConfig = yaml.safe_load(open(args.filename, "r"))
-schema = eval(open("/opencascade.js/src/customBuildSchema.py", "r").read())
 v = Validator(schema)
 if not v.validate(buildConfig, schema):
   raise Exception(v.errors)
@@ -35,21 +36,20 @@ compileCustomCodeBindings({
   "threading": os.environ['threading'],
 })
 
-def verifyBinding(binding) -> bool:
-  for dirpath, dirnames, filenames in os.walk(libraryBasePath + "/bindings"):
-    for item in filenames:
-      if item.endswith(".cpp.o") and binding["symbol"] == item[:-6]:
-        return True
-  return False
+builtSymbols = set()
+for dirpath, dirnames, filenames in os.walk(libraryBasePath + "/bindings"):
+  for item in filenames:
+    if item.endswith(".cpp.o"):
+      builtSymbols.add(item[:-6])
 
-def verifyBindings(bindings) -> bool:
+def verifyBindings(bindings) -> None:
   for binding in bindings:
-    if not verifyBinding(binding):
+    if not binding["symbol"] in builtSymbols:
       raise Exception("Requested binding " + json.dumps(binding) + " does not exist!")
 
 verifyBindings(buildConfig["mainBuild"]["bindings"])
 for extraBuild in buildConfig["extraBuilds"]:
-  verifyBindings(extraBuild)
+  verifyBindings(extraBuild["bindings"])
 
 def shouldProcessSymbol(symbol: str, bindings) -> bool:
   if len(bindings) == 0:
@@ -80,15 +80,7 @@ def runBuild(build):
       print("building " + additionalBindCodeFileName)
       command = [
         "emcc",
-        "-flto",
-        "-fexceptions",
-        "-sDISABLE_EXCEPTION_CATCHING=0",
-        "-DIGNORE_NO_ATOMICS=1",
-        "-DOCCT_NO_PLUGINS",
-        "-frtti",
-        "-DHAVE_RAPIDJSON",
-        "-Os",
-        "-pthread" if os.environ["threading"] == "multi-threaded" else "",
+        *compileFlags(os.environ["threading"]),
         *list(map(lambda x: "-I" + x, ocIncludePaths + additionalIncludePaths)),
         "-c", additionalBindCodeFileName,
       ]
@@ -116,10 +108,10 @@ def runBuild(build):
       if item.endswith(".o"):
         sourcesO.append(dirpath + "/" + item)
   subprocess.check_call([
-    "emcc", "-lembind", ("" if additionalBindCodeO is None else additionalBindCodeO),
+    "em++", "-lembind", *([] if additionalBindCodeO is None else [additionalBindCodeO]),
     *bindingsO, *sourcesO,
     "-o", os.getcwd() + "/" + build["name"],
-    "-pthread" if os.environ["threading"] == "multi-threaded" else "",
+    *threadingFlags(os.environ["threading"]),
     *build["emccFlags"],
   ])
   print("Build finished")
@@ -132,7 +124,7 @@ if buildConfig["generateTypescriptDefinitions"]:
   typescriptDefinitionOutput = ""
   typescriptExports = []
   for dts in typescriptDefinitions:
-    typescriptDefinitionOutput += dts[".d.ts"]
+    typescriptDefinitionOutput += re.sub(r"NCollection_DefaultHasher<[^<>]*>", "any", dts[".d.ts"])
     for export in dts["exports"]:
       typescriptExports.append({
         "export": export,

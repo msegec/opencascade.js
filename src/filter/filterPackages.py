@@ -46,13 +46,17 @@ def filterPackages(packageName):
       "XSDRAW",
       "XSDRAWIGES",
       "XSDRAWSTEP",
-      "XSDRAWSTLVRML",
+      "XSDRAWDE",
+      "XSDRAWGLTF",
+      "XSDRAWOBJ",
+      "XSDRAWPLY",
+      "XSDRAWSTL",
+      "XSDRAWVRML",
 
       ## Toolkit TKQADraw
       "QABugs",
       "QADNaming",
       "QADraw",
-      "QANCollection",
 
       ## Toolkit TKXDEDRAW
       "XDEDRAW",

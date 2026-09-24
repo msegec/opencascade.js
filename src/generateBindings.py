@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 from typing import Callable
-from bindings import EmbindBindings, TypescriptBindings, shouldProcessClass
+from bindings import EmbindBindings, TypescriptBindings, shouldProcessClass, normalizeSpelling
 import clang.cindex
 import os
 import errno
@@ -9,16 +9,18 @@ from filter.filterTypedefs import filterTypedef
 from filter.filterEnums import filterEnum
 from wasmGenerator.Common import ignoreDuplicateTypedef, SkipException
 from Common import ocIncludeFiles, includePathArgs
+from preamble import writePreamble
 import json
 import multiprocessing
 import os
 from filter.filterPackages import filterPackages
-from functools import partial
+from functools import partial, lru_cache
 
 libraryBasePath = "/opencascade.js/build/bindings"
 buildDirectory = "/opencascade.js/build"
 occtBasePath = "/occt/src/"
 ocIncludeStatements = os.linesep.join(map(lambda x: "#include \"" + os.path.basename(x) + "\"", list(sorted(ocIncludeFiles))))
+handleTypedefsFile = occtBasePath + "Handle_Typedefs.hxx"
 
 def mkdirp(name: str) -> None:
   try:
@@ -72,7 +74,7 @@ def filterEnums(child, customBuild):
 
 def processChildBatch(customCode, generator, buildType: str, extension: str, filterFunction: Callable[[any], bool], processFunction: Callable[[any, any], str], typedefGenerator: any, templateTypedefGenerator: any, preamble: str, customBuild: bool, batch):
   tu = parse(customCode)
-  children = list(generator(tu)[batch.start:batch.stop])
+  children = generator(tu)[batch.start:batch.stop]
 
   for child in children:
     if not filterFunction(child, customBuild) or child.spelling == "":
@@ -122,7 +124,9 @@ def processTemplate(child):
   for i, templateArgName in enumerate(templateArgNames):
     templateArgType = child.type.get_template_argument_type(i)
     if templateArgType.spelling == "":
-      raise SkipException("Template argument type is empty for at least one argument. Is this class using default values for template arguments? This is currently not supported (" + child.spelling + ")")
+      templateArgType = child.type.get_canonical().get_template_argument_type(i)
+    if templateArgType.spelling == "":
+      raise SkipException("Template argument type is empty for at least one argument (" + child.spelling + ")")
     templateArgs[templateArgName.spelling] = templateArgType
   
   return [templateClass, templateArgs]
@@ -146,6 +150,7 @@ def embindGenerationFuncEnums(tu, preamble, child, typedefs, templateTypedefs) -
 
   return preamble + output
 
+@lru_cache(maxsize=1)
 def templateTypedefGenerator(tu):
   return list(filter(
     lambda x:
@@ -156,8 +161,13 @@ def templateTypedefGenerator(tu):
       not ignoreDuplicateTypedef(x),
     tu.cursor.get_children()))
 
+@lru_cache(maxsize=1)
 def typedefGenerator(tu):
-  return list(filter(lambda x: x.kind == clang.cindex.CursorKind.TYPEDEF_DECL, tu.cursor.get_children()))
+  typedefs = {}
+  occtTypedefs = [x for x in tu.cursor.get_children() if x.kind == clang.cindex.CursorKind.TYPEDEF_DECL and x.location.file.name.startswith(occtBasePath)]
+  for x in sorted(occtTypedefs, key=lambda x: x.location.file.name != handleTypedefsFile):
+    typedefs.setdefault(normalizeSpelling(x.underlying_typedef_type.spelling), x.spelling)
+  return typedefs
 
 def allChildrenGenerator(tu):
   return list(tu.cursor.get_children())
@@ -201,16 +211,16 @@ def typescriptGenerationFuncEnums(tu, preamble, child, typedefs, templateTypedef
     "exports": typescript.exports,
   })
 
-def parse(additionalCppCode = ""):
-  index = clang.cindex.Index.create()
-  translationUnit = index.parse(
+def parseFiles(files):
+  translationUnit = clang.cindex.Index.create().parse(
     "myMain.h", [
       "-x",
       "c++",
       "-stdlib=libc++",
-      "-D__EMSCRIPTEN__"
+      "-D__EMSCRIPTEN__",
+      "-DOCCT_NO_DEPRECATED",
     ] + includePathArgs,
-    [["myMain.h", ocIncludeStatements + "\n" + additionalCppCode]]
+    files
   )
 
   if len(translationUnit.diagnostics) > 0:
@@ -219,6 +229,39 @@ def parse(additionalCppCode = ""):
       print("  " + d.format())
 
   return translationUnit
+
+def isTransient(theClass, known):
+  if theClass.spelling not in known:
+    known[theClass.spelling] = theClass.spelling == "Standard_Transient" or any(
+      isTransient(x.type.get_declaration().get_definition() or x.type.get_declaration(), known)
+      for x in theClass.get_children()
+      if x.kind == clang.cindex.CursorKind.CXX_BASE_SPECIFIER
+    )
+  return known[theClass.spelling]
+
+@lru_cache(maxsize=1)
+def handleTypedefs():
+  tu = parseFiles([["myMain.h", ocIncludeStatements]])
+  children = list(tu.cursor.get_children())
+  existing = set(x.spelling for x in children if x.kind == clang.cindex.CursorKind.TYPEDEF_DECL)
+  known = {}
+  names = [
+    x.spelling for x in children
+    if x.kind in [clang.cindex.CursorKind.CLASS_DECL, clang.cindex.CursorKind.STRUCT_DECL] and
+    x.is_definition() and
+    x.location.file.name.startswith(occtBasePath) and
+    filterPackages(os.path.basename(os.path.dirname(x.location.file.name))) and
+    not "Handle_" + x.spelling in existing and
+    isTransient(x, known)
+  ]
+  return "".join(map(lambda x: "typedef opencascade::handle<" + x + "> Handle_" + x + ";\n", dict.fromkeys(names)))
+
+@lru_cache(maxsize=1)
+def parse(additionalCppCode = ""):
+  return parseFiles([
+    ["myMain.h", ocIncludeStatements + "\n#include \"" + handleTypedefsFile + "\"\n" + additionalCppCode],
+    [handleTypedefsFile, handleTypedefs()],
+  ])
 
 referenceTypeTemplateDefs = \
   "\n" + \
@@ -230,16 +273,16 @@ referenceTypeTemplateDefs = \
   "T getReferenceValue(const emscripten::val& v) {\n" + \
   "  if(!(v.typeOf().as<std::string>() == \"object\")) {\n" + \
   "    return v.as<T>(allow_raw_pointers());\n" + \
-  "  } else if(v.typeOf().as<std::string>() == \"object\" && v.hasOwnProperty(\"current\")) {\n" + \
+  "  } else if(v.hasOwnProperty(\"current\")) {\n" + \
   "    return v[\"current\"].as<T>(allow_raw_pointers());\n" + \
   "  }\n" + \
-  "  throw(\"unsupported type\");\n" + \
+  "  emscripten::val::global(\"TypeError\").new_(std::string(\"unsupported type\")).throw_();\n" + \
   "}\n" + \
   "\n" + \
   "template<typename T>\n" + \
   "void updateReferenceValue(emscripten::val& v, T& val) {\n" + \
   "  if(v.typeOf().as<std::string>() == \"object\" && v.hasOwnProperty(\"current\")) {\n" + \
-  "    v.set(\"current\", val);\n" + \
+  "    v.set(\"current\", val, allow_raw_pointers());\n" + \
   "  }\n" + \
   "}\n" + \
   "\n"
@@ -250,7 +293,7 @@ def generateCustomCodeBindings(customCode):
   except Exception:
     pass
 
-  embindPreamble = ocIncludeStatements + "\n" + referenceTypeTemplateDefs + "\n" + customCode
+  embindPreamble = writePreamble(libraryBasePath + "/myMain.h", ocIncludeStatements + "\n" + handleTypedefs() + referenceTypeTemplateDefs + "\n" + customCode)
 
   process(".cpp", embindGenerationFuncClasses, embindGenerationFuncTemplates, embindGenerationFuncEnums, embindPreamble, customCode, True)
   process(".d.ts.json", typescriptGenerationFuncClasses, typescriptGenerationFuncTemplates, typescriptGenerationFuncEnums, "", customCode, True)
@@ -261,7 +304,7 @@ if __name__ == "__main__":
   except Exception:
     pass
 
-  embindPreamble = ocIncludeStatements + "\n" + referenceTypeTemplateDefs
+  embindPreamble = writePreamble(libraryBasePath, ocIncludeStatements + "\n" + handleTypedefs() + referenceTypeTemplateDefs)
   process(".cpp", embindGenerationFuncClasses, embindGenerationFuncTemplates, embindGenerationFuncEnums, embindPreamble, "", False)
 
   process(".d.ts.json", typescriptGenerationFuncClasses, typescriptGenerationFuncTemplates, typescriptGenerationFuncEnums, "", "", False)

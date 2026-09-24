@@ -4,17 +4,13 @@ import re
 from wasmGenerator.Common import SkipException, isAbstractClass, getMethodOverloadPostfix
 from filter.filterClasses import filterClass
 from filter.filterMethodOrProperties import filterMethodOrProperty
-from Common import occtBasePath
-from typing import Tuple, List
+from typing import List
 
 def merge(sep: str, *strings: List[str]):
   return sep.join(strings)
 
 def pick(condition: bool, strTrue: str, strFalse: str):
   return strTrue if condition else strFalse
-
-def pickWrap(condition: bool, wrapStart: Tuple[str, str], center: str, wrapEnd: Tuple[str, str]):
-  return (wrapStart[0] if condition else wrapStart[1]) + center + (wrapEnd[0] if condition else wrapEnd[1])
 
 def indent(level: int):
   return " " * level * 2
@@ -77,6 +73,103 @@ cStringTypes = [
 def isCString(type):
   return type.get_canonical().spelling in cStringTypes
 
+def unwrapElaborated(type):
+  return type.get_named_type() if type.kind == clang.cindex.TypeKind.ELABORATED else type
+
+def scopeSpelling(scope):
+  if scope.kind == clang.cindex.CursorKind.CLASS_TEMPLATE:
+    params = [x.spelling for x in scope.get_children() if x.kind in [
+      clang.cindex.CursorKind.TEMPLATE_TYPE_PARAMETER,
+      clang.cindex.CursorKind.TEMPLATE_NON_TYPE_PARAMETER,
+      clang.cindex.CursorKind.TEMPLATE_TEMPLATE_PARAMETER,
+    ]]
+    return scope.spelling + "<" + ", ".join(params) + ">"
+  return scope.type.spelling
+
+def normalizeSpelling(spelling):
+  return re.sub("(?<![\\w:])occ::handle<", "opencascade::handle<", spelling)
+
+def qualifiedSpelling(type):
+  inner = type
+  while inner.kind in [clang.cindex.TypeKind.LVALUEREFERENCE, clang.cindex.TypeKind.RVALUEREFERENCE, clang.cindex.TypeKind.POINTER]:
+    inner = inner.get_pointee()
+  if not inner.kind == clang.cindex.TypeKind.ELABORATED:
+    return type.spelling
+  declaration = inner.get_named_type().get_declaration()
+  scope = declaration.semantic_parent
+  if (
+    scope is None or
+    scope.spelling == "" or
+    not scope.kind in [clang.cindex.CursorKind.CLASS_DECL, clang.cindex.CursorKind.STRUCT_DECL, clang.cindex.CursorKind.CLASS_TEMPLATE] or
+    not re.sub("^(const |volatile )+", "", inner.spelling) == declaration.spelling
+  ):
+    return type.spelling
+  return re.sub("(?<![\\w:])" + re.escape(declaration.spelling) + "(?!\\w)", scopeSpelling(scope) + "::" + declaration.spelling, type.spelling, count=1)
+
+def typeSpelling(type):
+  return normalizeSpelling(qualifiedSpelling(type))
+
+def isPublicConstructor(cursor):
+  return (
+    cursor.kind == clang.cindex.CursorKind.CONSTRUCTOR and
+    cursor.access_specifier == clang.cindex.AccessSpecifier.PUBLIC and
+    not cursor.is_deleted_method()
+  )
+
+def canonicalReferee(type):
+  inner = type
+  while inner.kind in [clang.cindex.TypeKind.LVALUEREFERENCE, clang.cindex.TypeKind.RVALUEREFERENCE]:
+    inner = inner.get_pointee()
+  return inner.get_canonical()
+
+def qualifiedDeclarationName(type):
+  scopes = []
+  declaration = canonicalReferee(type).get_declaration()
+  while declaration is not None and not declaration.kind == clang.cindex.CursorKind.TRANSLATION_UNIT:
+    scopes.insert(0, declaration.spelling)
+    declaration = declaration.semantic_parent
+  return "::".join(x for x in scopes if not x.startswith("__"))
+
+def isStringView(type):
+  return (
+    qualifiedDeclarationName(type) == "std::basic_string_view" and
+    canonicalReferee(type).get_template_argument_type(0).spelling == "char"
+  )
+
+def optionalValueType(type):
+  if not qualifiedDeclarationName(type) == "std::optional":
+    return None
+  return canonicalReferee(type).get_template_argument_type(0)
+
+def unsupportedType(type):
+  name = qualifiedDeclarationName(type)
+  if name == "std::variant" or (name == "std::basic_string_view" and not isStringView(type)):
+    return type.spelling
+  value = optionalValueType(type)
+  if value is not None and (
+    value.spelling.startswith("std::") or
+    not (value.spelling in builtInTypes or value.kind in [clang.cindex.TypeKind.RECORD, clang.cindex.TypeKind.ENUM])
+  ):
+    return type.spelling
+  return None
+
+def signatureTypes(method):
+  if method.kind == clang.cindex.CursorKind.FIELD_DECL:
+    return [method.type]
+  return ([method.result_type] if method.kind == clang.cindex.CursorKind.CXX_METHOD else []) + [x.type for x in method.get_arguments()]
+
+def unsupportedTypeMessage(theClass, method):
+  unsupported = [x for x in map(unsupportedType, signatureTypes(method)) if x is not None]
+  if len(unsupported) == 0:
+    return None
+  return "Unsupported type " + unsupported[0] + ", skipping " + theClass.spelling + "::" + method.spelling
+
+def isSupported(theClass, method):
+  message = unsupportedTypeMessage(theClass, method)
+  if message is not None:
+    print(message)
+  return message is None
+
 def getClassTypeName(theClass, templateDecl = None):
   return templateDecl.spelling if templateDecl is not None else theClass.spelling
 
@@ -85,16 +178,28 @@ class Bindings:
     self.templateTypedefs = templateTypedefs
     self.translationUnit = translationUnit
     self.typedefs = typedefs
+    self.templateSelfSpelling = None
+    self.optionalTypes = set()
+
+  def collectOptionalTypes(self, method):
+    for type in signatureTypes(method):
+      value = optionalValueType(type)
+      if value is not None:
+        self.optionalTypes.add(value.spelling)
 
   def getTypedefedTemplateTypeAsString(self, theTypeSpelling, templateDecl = None, templateArgs = None):
     if templateDecl is None:
-      typedefType = next((x for x in self.typedefs if x.location.file.name.startswith(occtBasePath) and x.underlying_typedef_type.spelling == theTypeSpelling), None)
-      typedefType = None if typedefType is None else typedefType.spelling
+      typedefType = self.typedefs.get(theTypeSpelling)
     else:
       templateType = self.replaceTemplateArgs(theTypeSpelling, templateArgs)
       rawTemplateType = templateType.replace("&", "").replace("const", "").strip()
-      rawTypedefType = next((x for x in self.templateTypedefs if (x.underlying_typedef_type.spelling == rawTemplateType or x.underlying_typedef_type.spelling == "opencascade::" + rawTemplateType)), None)
-      rawTypedefType = rawTemplateType if rawTypedefType is None else rawTypedefType.spelling
+      rawTypedefType = next((x for x in self.templateTypedefs if (normalizeSpelling(x.underlying_typedef_type.spelling) == rawTemplateType or normalizeSpelling(x.underlying_typedef_type.spelling) == "opencascade::" + rawTemplateType)), None)
+      if rawTypedefType is not None:
+        rawTypedefType = rawTypedefType.spelling
+      elif rawTemplateType == self.templateSelfSpelling:
+        rawTypedefType = templateDecl.spelling
+      else:
+        rawTypedefType = rawTemplateType
       typedefType = templateType.replace(rawTemplateType, rawTypedefType)
     return theTypeSpelling if typedefType is None else typedefType
 
@@ -104,11 +209,13 @@ class Bindings:
       return newString
     for key in templateArgs:
       p = re.compile("(\\W+|^)" + key + "(\\W|$)")
-      newString = p.sub("\\1" + templateArgs[key].spelling + "\\2", newString)
+      newString = p.sub("\\1" + normalizeSpelling(templateArgs[key].spelling) + "\\2", newString)
     return newString
 
   def processClass(self, theClass, templateDecl = None, templateArgs = None):
     output = ""
+    if templateDecl is not None:
+      self.templateSelfSpelling = self.replaceTemplateArgs(scopeSpelling(theClass), templateArgs)
     isAbstract = isAbstractClass(theClass, self.translationUnit)
     if not isAbstract:
       output += self.processSimpleConstructor(theClass)
@@ -116,6 +223,11 @@ class Bindings:
       if not filterMethodOrProperty(theClass, method):
         continue
       try:
+        if method.access_specifier == clang.cindex.AccessSpecifier.PUBLIC and method.kind in [clang.cindex.CursorKind.CXX_METHOD, clang.cindex.CursorKind.FIELD_DECL] and not method.spelling.startswith("operator"):
+          message = unsupportedTypeMessage(theClass, method)
+          if message is not None:
+            raise SkipException(message)
+          self.collectOptionalTypes(method)
         output += self.processMethodOrProperty(theClass, method, templateDecl, templateArgs)
       except SkipException as e:
         print(str(e))
@@ -143,8 +255,8 @@ class EmbindBindings(Bindings):
 
     baseSpec = list(filter(lambda x: x.kind == clang.cindex.CursorKind.CXX_BASE_SPECIFIER and x.access_specifier == clang.cindex.AccessSpecifier.PUBLIC, theClass.get_children()))
 
-    if len(baseSpec) > 0:
-      baseClassBinding = ", base<" + baseSpec[0].type.spelling + ">"
+    if len(baseSpec) > 0 and not baseSpec[0].type.get_canonical().spelling.startswith("std::"):
+      baseClassBinding = ", base<" + self.replaceTemplateArgs(baseSpec[0].type.spelling, templateArgs) + ">"
     else:
       baseClassBinding = ""
 
@@ -152,14 +264,16 @@ class EmbindBindings(Bindings):
     output += "  class_<" + className + baseClassBinding + ">(\"" + className + "\")\n"
 
     output += super().processClass(theClass, templateDecl, templateArgs)
+    output += "".join(map(lambda x: "  register_optional<" + x + ">();\n", sorted(self.optionalTypes)))
 
     output += "}\n\n"
 
     # Epilog
     nonPublicDestructor = any(x.kind == clang.cindex.CursorKind.DESTRUCTOR and not x.access_specifier == clang.cindex.AccessSpecifier.PUBLIC for x in theClass.get_children())
-    placementDelete = next((x for x in theClass.get_children() if x.spelling == "operator delete" and len(list(x.get_arguments())) == 2), None) is not None
-    if nonPublicDestructor or placementDelete:
-      output += "namespace emscripten { namespace internal { template<> void raw_destructor<" + theClass.spelling + ">(" + theClass.spelling + "* ptr) { /* do nothing */ } } }\n"
+    deletes = [x for x in theClass.get_children() if x.spelling == "operator delete"]
+    noUsualDelete = len(deletes) > 0 and not any(x.access_specifier == clang.cindex.AccessSpecifier.PUBLIC and len(list(x.get_arguments())) == 1 for x in deletes)
+    if nonPublicDestructor or noUsualDelete:
+      output += "namespace emscripten { namespace internal { template<> void raw_destructor<" + className + ">(" + className + "* ptr) { /* do nothing */ } } }\n"
     return output
 
   def processFinalizeClass(self):
@@ -173,14 +287,14 @@ class EmbindBindings(Bindings):
     if len(constructors) == 0:
       output += "    .constructor<>()\n"
       return output
-    publicConstructors = list(filter(lambda x: x.kind == clang.cindex.CursorKind.CONSTRUCTOR and x.access_specifier == clang.cindex.AccessSpecifier.PUBLIC, children))
+    publicConstructors = list(filter(isPublicConstructor, children))
     if len(publicConstructors) == 0 or len(publicConstructors) > 1:
       return output
     standardConstructor = publicConstructors[0]
     if not standardConstructor:
       return output
 
-    argTypesBindings = ", ".join(list(map(lambda x: x.type.spelling, list(standardConstructor.get_arguments()))))
+    argTypesBindings = ", ".join(list(map(lambda x: typeSpelling(x.type), list(standardConstructor.get_arguments()))))
     
     output += "    .constructor<" + argTypesBindings + ">()\n"
     return output
@@ -198,12 +312,12 @@ class EmbindBindings(Bindings):
         argBinding = const + argChildren[0].type.spelling + " (&" + (arg.spelling if argNames else "") + ")[" + arrayCount + "]"
         changed = True
       else:
-        typename = self.getTypedefedTemplateTypeAsString(arg.type.spelling, templateDecl, templateArgs)
+        typename = self.getTypedefedTemplateTypeAsString(typeSpelling(arg.type), templateDecl, templateArgs)
         if arg.type.kind == clang.cindex.TypeKind.LVALUEREFERENCE:
           tokenList = list(arg.get_tokens())
           isConstRef = len(tokenList) > 0 and tokenList[0].spelling == "const"
           if not isConstRef:
-            if typename[-2] == "*" or "".join(typename.rsplit("&", 1)).strip() in ["Standard_Boolean", "Standard_Real", "Standard_Integer"]: # types that can be copied
+            if typename[-2] == "*" or "".join(typename.rsplit("&", 1)).strip() in ["Standard_Boolean", "Standard_Real", "Standard_Integer", "bool"]: # types that can be copied
               typename = "".join(typename.rsplit("&", 1))
               changed = True
             else:
@@ -229,8 +343,8 @@ class EmbindBindings(Bindings):
         return (
           type.kind == clang.cindex.TypeKind.LVALUEREFERENCE and (
             type.get_pointee().get_canonical().spelling in builtInTypes or
-            type.get_pointee().kind == clang.cindex.TypeKind.ENUM or
-            type.get_pointee().kind == clang.cindex.TypeKind.POINTER or (
+            unwrapElaborated(type.get_pointee()).kind == clang.cindex.TypeKind.ENUM or
+            unwrapElaborated(type.get_pointee()).kind == clang.cindex.TypeKind.POINTER or (
               theClass.kind == clang.cindex.CursorKind.CLASS_TEMPLATE and
               type.get_pointee().spelling in templateArgs and
               templateArgs[type.get_pointee().spelling].get_canonical().spelling in builtInTypes
@@ -238,7 +352,8 @@ class EmbindBindings(Bindings):
           ) or (
             type.get_canonical().kind == clang.cindex.TypeKind.POINTER and 
             isCString(type)
-          )
+          ) or
+          isStringView(type)
         )
 
       args = list(method.get_arguments())
@@ -249,7 +364,7 @@ class EmbindBindings(Bindings):
           if templateArgs is not None and args[x[0]].type.get_pointee().spelling.replace("const ", "") in templateArgs:
             return args[x[0]].type.spelling.replace(args[x[0]].type.get_pointee().spelling.replace("const ", ""), templateArgs[args[x[0]].type.get_pointee().spelling.replace("const ", "")].spelling)
           else:
-            return args[x[0]].type.spelling
+            return self.replaceTemplateArgs(typeSpelling(args[x[0]].type), templateArgs)
         def getArgName(x):
           return pick(
             not args[x[0]].spelling == "",
@@ -260,7 +375,7 @@ class EmbindBindings(Bindings):
           if templateArgs is not None and type.get_pointee().spelling.replace("const ", "") in templateArgs:
             return type.get_pointee().spelling.replace(type.get_pointee().spelling.replace("const ", ""), templateArgs[type.get_pointee().spelling.replace("const ", "")].spelling)
           else:
-            return type.get_pointee().spelling
+            return typeSpelling(type.get_pointee())
         classTypeName = getClassTypeName(theClass, templateDecl)
         wrappedParamTypes = merge(", ", *map(lambda x:
           pick(
@@ -276,8 +391,17 @@ class EmbindBindings(Bindings):
             f"emscripten::val {getArgName(x)}",
             f"{replaceTemplateArgs(x)} {getArgName(x)}",
           ), enumerate(argsNeedingWrapper)))
+        def needsStringCopy(x):
+          return x[1] and isCString(args[x[0]].type) and (
+            not args[x[0]].type.get_canonical().get_pointee().is_const_qualified() or
+            args[x[0]].type.is_const_qualified()
+          )
         def generateGetReferenceValue(x):
-          if x[1] and not isCString(args[x[0]].type):
+          if x[1] and isStringView(args[x[0]].type):
+            return f"{indent(4)}std::string str_{getArgName(x)} = {getArgName(x)}.as<std::string>();\n"
+          elif needsStringCopy(x):
+            return f"{indent(4)}std::string str_{getArgName(x)} = {getArgName(x)}.isNull() ? std::string() : {getArgName(x)}.as<std::string>();\n"
+          elif x[1] and not isCString(args[x[0]].type):
             return (
               merge("",
                 indent(4),
@@ -292,36 +416,34 @@ class EmbindBindings(Bindings):
           else:
             return ""
         def generateUpdateReferenceValue(x):
-          if x[1] and not isCString(args[x[0]].type):
+          if x[1] and not isCString(args[x[0]].type) and not isStringView(args[x[0]].type):
             return  f"{indent(4)}updateReferenceValue<{getArgTypeName(args[x[0]].type)}>({getArgName(x)}, ref_{getArgName(x)});\n"
           else:
             return ""
         def generateInvocationArgs(x):
           if x[1]:
-            if not isCString(args[x[0]].type):
+            if isStringView(args[x[0]].type):
+              return f"std::string_view(str_{getArgName(x)})"
+            elif not isCString(args[x[0]].type):
               return f"ref_{getArgName(x)}"
             else:
-              if not args[x[0]].type.get_canonical().get_pointee().is_const_qualified() or args[x[0]].type.is_const_qualified():
-                return f"{getArgName(x)}.isNull() ? nullptr : strdup({getArgName(x)}.as<std::string>().c_str())"
+              if needsStringCopy(x):
+                return f"{getArgName(x)}.isNull() ? nullptr : str_{getArgName(x)}.data()"
               else:
                 return f"{getArgName(x)}.isNull() ? nullptr : {getArgName(x)}.as<std::string>().c_str()"
           else:
             return getArgName(x)
         resultTypeSpelling = \
-          pick(returnNeedsWrapper, "emscripten::val", self.getTypedefedTemplateTypeAsString(method.result_type.spelling, templateDecl, templateArgs))
+          pick(returnNeedsWrapper, "emscripten::val", self.getTypedefedTemplateTypeAsString(typeSpelling(method.result_type), templateDecl, templateArgs))
         functionBindingHead = \
           merge("",
             "\n",
             indent(3),
-            pickWrap(not method.is_static_method(),
-              [f"std::function<{resultTypeSpelling}(", f"(({resultTypeSpelling} (*)("],
-              merge("",
-                pick(not method.is_static_method(), f"{classTypeName}&", ""),
-                pick(not method.is_static_method() and len(args) > 0, ", ", ""),
-                wrappedParamTypes,
-              ),
-              [")>(", "))"]
-            ),
+            f"(({resultTypeSpelling} (*)(",
+            pick(not method.is_static_method(), f"{classTypeName}&", ""),
+            pick(not method.is_static_method() and len(args) > 0, ", ", ""),
+            wrappedParamTypes,
+            "))",
             merge("",
               "[](",
               pick(not method.is_static_method(), f"{classTypeName}& that", ""),
@@ -346,7 +468,7 @@ class EmbindBindings(Bindings):
               ""
             ),
             merge("",
-              pick(not method.is_static_method(), "that.", f"{theClass.spelling}::"),
+              pick(not method.is_static_method(), "that.", f"{className}::"),
               f'{method.spelling}({merge(", ", *map(lambda x: generateInvocationArgs(x), enumerate(argsNeedingWrapper)))})',
             ),
             ";\n",
@@ -361,10 +483,10 @@ class EmbindBindings(Bindings):
                   merge("",
                     indent(4),
                     "return ret == nullptr ? emscripten::val::null() : emscripten::val(static_cast<",
-                      pick(isCString(method.result_type), "std::string", self.getTypedefedTemplateTypeAsString(method.result_type.spelling, templateDecl, templateArgs)),
+                      pick(isCString(method.result_type), "std::string", self.getTypedefedTemplateTypeAsString(typeSpelling(method.result_type), templateDecl, templateArgs)),
                     ">(ret));\n",
                   ),
-                  f"{indent(4)}return emscripten::val(ret);\n",
+                  f"{indent(4)}return emscripten::val({pick(isStringView(method.result_type), 'std::string(ret)', 'ret')});\n",
                 ),
                 f"{indent(4)}return ret;\n",
               ),
@@ -383,7 +505,7 @@ class EmbindBindings(Bindings):
         else:
           functionBinding = merge("",
             " select_overload<",
-            self.getTypedefedTemplateTypeAsString(method.result_type.spelling, templateDecl, templateArgs),
+            self.getTypedefedTemplateTypeAsString(typeSpelling(method.result_type), templateDecl, templateArgs),
             f'({merge(", ", *map(lambda x: self.getSingleArgumentBinding(True, True, templateDecl, templateArgs)(x)[0], list(method.get_arguments())))})',
             pick(method.is_const_method(), "const", ""),
             pick(not method.is_static_method(), f", {getClassTypeName(theClass, templateDecl)}", ""),
@@ -409,19 +531,20 @@ class EmbindBindings(Bindings):
     output = ""
     if children is None:
       children = list(theClass.get_children())
-    constructors = list(filter(lambda x: x.kind == clang.cindex.CursorKind.CONSTRUCTOR and x.access_specifier == clang.cindex.AccessSpecifier.PUBLIC, children))
+    constructors = list(filter(isPublicConstructor, children))
     if len(constructors) == 1:
       return output
     constructorBindings = ""
-    allOverloads = [m for m in children if m.kind == clang.cindex.CursorKind.CONSTRUCTOR and m.access_specifier == clang.cindex.AccessSpecifier.PUBLIC]
+    allOverloads = list(filter(isPublicConstructor, children))
     if len(allOverloads) == 1:
       raise Exception("Something weird happened")
-    for constructor in filter(lambda x: filterMethodOrProperty(theClass, x), constructors):
+    for constructor in filter(lambda x: filterMethodOrProperty(theClass, x) and isSupported(theClass, x), constructors):
       overloadPostfix = "" if (not len(allOverloads) > 1) else "_" + str(allOverloads.index(constructor) + 1)
+      self.collectOptionalTypes(constructor)
 
-      args = ", ".join(list(map(lambda x: ("std::string " + x.spelling) if isCString(x.type) else self.getSingleArgumentBinding(True, True, templateDecl, templateArgs)(x)[0], constructor.get_arguments())))
+      args = ", ".join(list(map(lambda x: ("std::string " + x.spelling) if isCString(x.type) or isStringView(x.type) else self.getSingleArgumentBinding(True, True, templateDecl, templateArgs)(x)[0], constructor.get_arguments())))
       argNames = ", ".join(list(map(lambda x: (x.spelling + ".c_str()") if isCString(x.type) else x.spelling, constructor.get_arguments())))
-      argTypes = ", ".join(list(map(lambda x: "std::string" if isCString(x.type) else self.getSingleArgumentBinding(False, True, templateDecl, templateArgs)(x)[0], constructor.get_arguments())))
+      argTypes = ", ".join(list(map(lambda x: "std::string" if isCString(x.type) or isStringView(x.type) else self.getSingleArgumentBinding(False, True, templateDecl, templateArgs)(x)[0], constructor.get_arguments())))
 
       name = getClassTypeName(theClass, templateDecl)
       constructorBindings += "    struct " + name + overloadPostfix + " : public " + name + " {\n"
@@ -491,7 +614,7 @@ class TypescriptBindings(Bindings):
     if len(constructors) == 0:
       output += "  constructor();\n"
       return output
-    publicConstructors = list(filter(lambda x: x.kind == clang.cindex.CursorKind.CONSTRUCTOR and x.access_specifier == clang.cindex.AccessSpecifier.PUBLIC, children))
+    publicConstructors = list(filter(isPublicConstructor, children))
     if len(publicConstructors) == 0 or len(publicConstructors) > 1:
       return output
     standardConstructor = publicConstructors[0]
@@ -526,7 +649,8 @@ class TypescriptBindings(Bindings):
     if typeName in [
       "char",
       "unsigned char",
-      "std::string"
+      "std::string",
+      "std::string_view"
     ]:
       return "string"
 
@@ -537,8 +661,11 @@ class TypescriptBindings(Bindings):
     return typeName
 
   def getTypescriptDefFromResultType(self, res, templateDecl = None, templateArgs = None):
+    value = optionalValueType(res)
+    if value is not None:
+      return self.getTypescriptDefFromResultType(value, templateDecl, templateArgs) + " | undefined"
     if not res.spelling == "void":
-      typedefType = self.getTypedefedTemplateTypeAsString(res.spelling.replace("&", "").replace("const", "").replace("*", "").strip(), templateDecl, templateArgs)
+      typedefType = self.getTypedefedTemplateTypeAsString(typeSpelling(res).replace("&", "").replace("const", "").replace("*", "").strip(), templateDecl, templateArgs)
       resTypeName = typedefType.replace("&", "").replace("const", "").replace("*", "").strip()
       resTypeName = self.convertBuiltinTypes(resTypeName)
     else:
@@ -550,10 +677,12 @@ class TypescriptBindings(Bindings):
     return resTypeName
 
   def getTypescriptDefFromArg(self, arg, suffix = "", templateDecl = None, templateArgs = None):
-    argTypeName = self.getTypedefedTemplateTypeAsString(arg.type.spelling.replace("&", "").replace("const", "").replace("*", "").strip(), templateDecl, templateArgs)
+    argTypeName = self.getTypedefedTemplateTypeAsString(typeSpelling(arg.type).replace("&", "").replace("const", "").replace("*", "").strip(), templateDecl, templateArgs)
     argTypeName = argTypeName.replace("&", "").replace("const", "").replace("*", "").strip()
     argTypeName = self.convertBuiltinTypes(argTypeName)
-    if argTypeName == "" or "(" in argTypeName or ":" in argTypeName:
+    if optionalValueType(arg.type) is not None:
+      argTypeName = self.getTypescriptDefFromResultType(optionalValueType(arg.type), templateDecl, templateArgs) + " | undefined"
+    elif argTypeName == "" or "(" in argTypeName or ":" in argTypeName:
       print("could not generate proper types for type name '" + argTypeName + "', using 'any' instead.")
       argTypeName = "any"
 
@@ -577,14 +706,14 @@ class TypescriptBindings(Bindings):
     output = ""
     if children is None:
       children = list(theClass.get_children())
-    constructors = list(filter(lambda x: x.kind == clang.cindex.CursorKind.CONSTRUCTOR and x.access_specifier == clang.cindex.AccessSpecifier.PUBLIC, children))
+    constructors = list(filter(isPublicConstructor, children))
     if len(constructors) == 1:
       return output
 
     constructorTypescriptDef = ""
     allOverloadedConstructors = []
 
-    for constructor in filter(lambda x: filterMethodOrProperty(theClass, x), constructors):
+    for constructor in filter(lambda x: filterMethodOrProperty(theClass, x) and isSupported(theClass, x), constructors):
       [overloadPostfix, numOverloads] = getMethodOverloadPostfix(theClass, constructor, children)
 
       argsTypescriptDef = ", ".join(list(map(lambda x: self.getTypescriptDefFromArg(x, "", templateDecl, templateArgs), list(constructor.get_arguments()))))
