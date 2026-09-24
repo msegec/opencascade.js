@@ -3,4 +3,5 @@
 !index.d.ts
 !node.js
 !node.d.ts
+!rockett-helpers.d.ts
 !tsconfig.json

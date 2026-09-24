@@ -1,0 +1,401 @@
+# Rockett-CAD server kernel: only the symbols it reaches, plus their base
+# chains and the argument and return types of the methods it calls.
+# Regenerate with src/usedSymbols.py opencascade.full.d.ts server/src, then
+# again adding server/test; the difference is the test-only group.
+# The helpers group holds types the additionalBindCode helpers take or
+# return; keep it by hand. The TopoDS cast shim is hand-written there too,
+# so TopoDS is not a generated symbol.
+# The planned group holds symbols open work-order rows need before their code
+# exists; keep it by hand until src/usedSymbols.py finds them in server/src.
+mainBuild:
+  name: opencascade.rockett.js
+  bindings:
+    - symbol: OCJS
+    - symbol: Adaptor3d_Curve
+    - symbol: Adaptor3d_Surface
+    - symbol: BRepAdaptor_Curve
+    - symbol: BRepAdaptor_Surface
+    - symbol: BRepAlgoAPI_Algo
+    - symbol: BRepAlgoAPI_BooleanOperation
+    - symbol: BRepAlgoAPI_BuilderAlgo
+    - symbol: BRepAlgoAPI_Common
+    - symbol: BRepAlgoAPI_Cut
+    - symbol: BRepAlgoAPI_Fuse
+    - symbol: BRepAlgoAPI_Splitter
+    - symbol: BRepBndLib
+    - symbol: BRepBuilderAPI_Command
+    - symbol: BRepBuilderAPI_Copy
+    - symbol: BRepBuilderAPI_MakeEdge
+    - symbol: BRepBuilderAPI_MakeFace
+    - symbol: BRepBuilderAPI_MakePolygon
+    - symbol: BRepBuilderAPI_MakeShape
+    - symbol: BRepBuilderAPI_MakeSolid
+    - symbol: BRepBuilderAPI_MakeVertex
+    - symbol: BRepBuilderAPI_MakeWire
+    - symbol: BRepBuilderAPI_ModifyShape
+    - symbol: BRepBuilderAPI_Sewing
+    - symbol: BRepBuilderAPI_Transform
+    - symbol: BRepCheck_Analyzer
+    - symbol: BRepClass_Edge
+    - symbol: BRepClass_FClassifier
+    - symbol: BRepClass_FaceClassifier
+    - symbol: BRepClass_FaceExplorer
+    - symbol: BRepExtrema_DistShapeShape
+    - symbol: BRepFilletAPI_LocalOperation
+    - symbol: BRepFilletAPI_MakeChamfer
+    - symbol: BRepFilletAPI_MakeFillet
+    - symbol: BRepGProp
+    - symbol: BRepLib
+    - symbol: BRepMesh_DiscretRoot
+    - symbol: BRepMesh_IncrementalMesh
+    - symbol: BRepOffsetAPI_MakeOffset
+    - symbol: BRepOffsetAPI_MakeOffsetShape
+    - symbol: BRepOffsetAPI_MakePipe
+    - symbol: BRepOffsetAPI_MakeThickSolid
+    - symbol: BRepOffsetAPI_ThruSections
+    - symbol: BRepOffset_Mode
+    - symbol: BRepPrimAPI_MakePrism
+    - symbol: BRepPrimAPI_MakeRevol
+    - symbol: BRepPrimAPI_MakeSweep
+    - symbol: BRepTools
+    - symbol: BRepTools_History
+    - symbol: BRep_Builder
+    - symbol: BRep_Tool
+    - symbol: Bnd_Box
+    - symbol: ChFi3d_FilletShape
+    - symbol: Extrema_ExtAlgo
+    - symbol: Extrema_ExtFlag
+    - symbol: GC_MakeArcOfCircle
+    - symbol: GC_Root
+    - symbol: GProp_GProps
+    - symbol: GeomAbs_CurveType
+    - symbol: GeomAbs_JoinType
+    - symbol: GeomAbs_SurfaceType
+    - symbol: GeomAdaptor_TransformedCurve
+    - symbol: GeomAdaptor_TransformedSurface
+    - symbol: Geom_BoundedCurve
+    - symbol: Geom_Curve
+    - symbol: Geom_ElementarySurface
+    - symbol: Geom_Geometry
+    - symbol: Geom_Plane
+    - symbol: Geom_Surface
+    - symbol: Geom_TrimmedCurve
+    - symbol: Handle_BRepTools_History
+    - symbol: Handle_Geom_Curve
+    - symbol: Handle_Geom_Geometry
+    - symbol: Handle_Geom_Surface
+    - symbol: Handle_Geom_TrimmedCurve
+    - symbol: Handle_Poly_Triangulation
+    - symbol: IFSelect_ReturnStatus
+    - symbol: IGESControl_Reader
+    - symbol: IntRes2d_Position
+    - symbol: Message_ProgressRange
+    - symbol: NCollection_BaseList
+    - symbol: NCollection_BaseMap
+    - symbol: Poly_Triangle
+    - symbol: Poly_Triangulation
+    - symbol: RWObj
+    - symbol: RWStl
+    - symbol: STEPControl_Reader
+    - symbol: ShapeUpgrade_UnifySameDomain
+    - symbol: Standard_Failure
+    - symbol: Standard_Transient
+    - symbol: TopAbs_Orientation
+    - symbol: TopAbs_ShapeEnum
+    - symbol: TopAbs_State
+    - symbol: TopExp
+    - symbol: TopExp_Explorer
+    - symbol: TopLoc_Location
+    - symbol: TopTools_IndexedDataMapOfShapeListOfShape
+    - symbol: TopTools_IndexedMapOfShape
+    - symbol: TopTools_ListOfShape
+    - symbol: TopoDS_Builder
+    - symbol: TopoDS_Compound
+    - symbol: TopoDS_Edge
+    - symbol: TopoDS_Face
+    - symbol: TopoDS_Shape
+    - symbol: TopoDS_Shell
+    - symbol: TopoDS_Solid
+    - symbol: TopoDS_Vertex
+    - symbol: TopoDS_Wire
+    - symbol: XSControl_Reader
+    - symbol: gp_Ax1
+    - symbol: gp_Ax2
+    - symbol: gp_Ax3
+    - symbol: gp_Circ
+    - symbol: gp_Cylinder
+    - symbol: gp_Dir
+    - symbol: gp_Pln
+    - symbol: gp_Pnt
+    - symbol: gp_Pnt2d
+    - symbol: gp_Quaternion
+    - symbol: gp_Trsf
+    - symbol: gp_Trsf2d
+    - symbol: gp_Vec
+    - symbol: gp_Vec2d
+    # helpers
+    - symbol: STEPCAFControl_Reader
+    - symbol: TCollection_ExtendedString
+    - symbol: TDF_Label
+    # planned: open rows that need these before server/src uses them
+    # (CAM-010, REF-010); usedSymbols.py moves each to the top group once used
+    - symbol: BRepAlgoAPI_Section
+    - symbol: gp_Cone
+    - symbol: gp_Torus
+    # test-only
+    - symbol: BRepPrimAPI_MakeBox
+    - symbol: BRepPrimAPI_MakeCylinder
+    - symbol: BRepPrimAPI_MakeOneAxis
+    - symbol: BRepPrim_Cylinder
+    - symbol: BRepPrim_OneAxis
+    - symbol: BRepPrim_Revolution
+    - symbol: CDF_Application
+    - symbol: CDM_Application
+    - symbol: CDM_Document
+    - symbol: Geom2d_Curve
+    - symbol: Geom2d_Geometry
+    - symbol: Handle_CDM_Application
+    - symbol: Handle_CDM_Document
+    - symbol: Handle_Geom2d_Curve
+    - symbol: Handle_Geom2d_Geometry
+    - symbol: Handle_PCDM_ReaderFilter
+    - symbol: Handle_TDF_Attribute
+    - symbol: Handle_TDF_DataSet
+    - symbol: Handle_TDataStd_Name
+    - symbol: Handle_TDocStd_Document
+    - symbol: Handle_XCAFApp_Application
+    - symbol: Handle_XCAFDoc_ColorTool
+    - symbol: Handle_XCAFDoc_LayerTool
+    - symbol: Handle_XCAFDoc_ShapeTool
+    - symbol: IGESControl_Writer
+    - symbol: NCollection_BaseSequence
+    - symbol: PCDM_ReaderFilter
+    - symbol: Quantity_Color
+    - symbol: Quantity_TypeOfColor
+    - symbol: RWGltf_CafWriter
+    - symbol: STEPCAFControl_Writer
+    - symbol: STEPControl_StepModelType
+    - symbol: STEPControl_Writer
+    - symbol: Standard_GUID
+    - symbol: TColStd_IndexedDataMapOfStringString
+    - symbol: TCollection_AsciiString
+    - symbol: TDF_Attribute
+    - symbol: TDF_DataSet
+    - symbol: TDF_LabelSequence
+    - symbol: TDataStd_GenericEmpty
+    - symbol: TDataStd_GenericExtString
+    - symbol: TDataStd_Name
+    - symbol: TDocStd_Application
+    - symbol: TDocStd_Document
+    - symbol: TopTools_FormatVersion
+    - symbol: XCAFApp_Application
+    - symbol: XCAFDoc_ColorTool
+    - symbol: XCAFDoc_ColorType
+    - symbol: XCAFDoc_DocumentTool
+    - symbol: XCAFDoc_LayerTool
+    - symbol: XCAFDoc_ShapeTool
+    - symbol: gp_Sphere
+    - symbol: gp_XY
+    - symbol: gp_XYZ
+  additionalBindCode: |
+    #include <BRepAdaptor_Curve.hxx>
+    #include <BRep_Tool.hxx>
+    #include <Geom_TrimmedCurve.hxx>
+    #include <Message_ProgressIndicator.hxx>
+    #include <Poly_Triangulation.hxx>
+    #include <STEPCAFControl_Reader.hxx>
+    #include <STEPControl_Reader.hxx>
+    #include <Standard_RangeError.hxx>
+    #include <Standard_Version.hxx>
+    #include <TCollection_AsciiString.hxx>
+    #include <TDF_Label.hxx>
+    #include <TDataStd_Name.hxx>
+    #include <TopoDS.hxx>
+    #include <TopoDS_Edge.hxx>
+    #include <TopoDS_Face.hxx>
+    #include <TopoDS_Shell.hxx>
+    #include <TopoDS_Solid.hxx>
+    #include <TopoDS_Vertex.hxx>
+    #include <TopoDS_Wire.hxx>
+    #include <emscripten/bind.h>
+    #include <algorithm>
+    #include <cmath>
+    #include <cstdint>
+    #include <istream>
+    #include <streambuf>
+    #include <string>
+    #include <utility>
+    #include <vector>
+    using namespace emscripten;
+
+    #ifndef OCJS_COMMIT
+    #define OCJS_COMMIT unknown
+    #endif
+    #define OCJS_STRING(x) #x
+    #define OCJS_VALUE(x) OCJS_STRING(x)
+
+    template <typename T>
+    static val copied(const char* type, const std::vector<T>& xs) {
+      return val::global(type).new_(typed_memory_view(xs.size(), xs.data()));
+    }
+
+    static val arrays(const Handle(Poly_Triangulation)& tri, const gp_Trsf& trsf, bool reversed) {
+      std::vector<double> positions;
+      std::vector<uint32_t> indices;
+      if (!tri.IsNull()) {
+        positions.reserve(3 * tri->NbNodes());
+        for (int i = 1; i <= tri->NbNodes(); i++) {
+          const gp_Pnt p = tri->Node(i).Transformed(trsf);
+          positions.insert(positions.end(), {p.X(), p.Y(), p.Z()});
+        }
+        indices.reserve(3 * tri->NbTriangles());
+        for (int i = 1; i <= tri->NbTriangles(); i++) {
+          const Poly_Triangle& t = tri->Triangle(i);
+          const uint32_t a = t.Value(1) - 1, b = t.Value(2) - 1, c = t.Value(3) - 1;
+          indices.insert(indices.end(), {a, reversed ? c : b, reversed ? b : c});
+        }
+      }
+      val out = val::object();
+      out.set("positions", copied("Float64Array", positions));
+      out.set("indices", copied("Uint32Array", indices));
+      return out;
+    }
+
+    static val meshFace(const TopoDS_Face& face) {
+      TopLoc_Location loc;
+      const Handle(Poly_Triangulation)& tri = BRep_Tool::Triangulation(face, loc);
+      if (tri.IsNull()) return val::null();
+      const gp_Trsf& trsf = loc.Transformation();
+      const bool reversed = face.Orientation() == TopAbs_REVERSED;
+      const double sgn = reversed ? -1 : 1;
+      tri->ComputeNormals();
+      std::vector<double> normals;
+      normals.reserve(3 * tri->NbNodes());
+      for (int i = 1; i <= tri->NbNodes(); i++) {
+        const gp_Dir d = tri->Normal(i).Transformed(trsf);
+        normals.insert(normals.end(), {sgn * d.X(), sgn * d.Y(), sgn * d.Z()});
+      }
+      val out = arrays(tri, trsf, reversed);
+      out.set("normals", copied("Float64Array", normals));
+      return out;
+    }
+
+    static val meshTriangulation(const Handle(Poly_Triangulation)& tri) {
+      return arrays(tri, gp_Trsf(), false);
+    }
+
+    static val sampleEdge(const TopoDS_Edge& edge) {
+      std::vector<double> out;
+      try {
+        BRepAdaptor_Curve curve(edge);
+        const double first = curve.FirstParameter(), last = curve.LastParameter();
+        const GeomAbs_CurveType type = curve.GetType();
+        double samples = 32;
+        if (type == GeomAbs_Line) samples = 1;
+        else if (type == GeomAbs_Circle)
+          samples = std::max(8.0, std::ceil((std::abs(last - first) / (M_PI * 2)) * 64));
+        for (int i = 0; i <= samples; i++) {
+          const gp_Pnt p = curve.Value(first + ((last - first) * i) / samples);
+          out.insert(out.end(), {p.X(), p.Y(), p.Z()});
+        }
+      } catch (...) {
+        out.clear();
+      }
+      return copied("Float64Array", out);
+    }
+
+    EMSCRIPTEN_BINDINGS(RockettMesh) {
+      function("meshFace", &meshFace);
+      function("meshTriangulation", &meshTriangulation);
+      function("sampleEdge", &sampleEdge);
+    }
+
+    static val versionId() {
+      val out = val::object();
+      out.set("occt", std::string(OCC_VERSION_COMPLETE));
+      out.set("commit", std::string(OCJS_VALUE(OCJS_COMMIT)));
+      return out;
+    }
+
+    static std::string extendedToUtf8(const TCollection_ExtendedString& text) {
+      return TCollection_AsciiString(text).ToCString();
+    }
+
+    static val labelName(const TDF_Label& label) {
+      Handle(TDataStd_Name) name;
+      if (!label.FindAttribute(TDataStd_Name::GetID(), name)) return val::null();
+      return val(extendedToUtf8(name->Get()));
+    }
+
+    static void setLabelName(const TDF_Label& label, const std::string& name) {
+      TDataStd_Name::Set(label, TCollection_ExtendedString(name.c_str(), true));
+    }
+
+    struct BytesBuf : std::streambuf {
+      explicit BytesBuf(const std::string& bytes) {
+        char* data = const_cast<char*>(bytes.data());
+        setg(data, data, data + bytes.size());
+      }
+    };
+
+    template <typename Reader>
+    static IFSelect_ReturnStatus readStepBytes(Reader& reader, const std::string& bytes) {
+      BytesBuf buf(bytes);
+      std::istream in(&buf);
+      return reader.ReadStream("memory.step", in);
+    }
+
+    static Handle(Geom_Curve) upcastCurve(const Handle(Geom_TrimmedCurve)& curve) {
+      return curve;
+    }
+
+    class CancelIndicator : public Message_ProgressIndicator {
+    public:
+      explicit CancelIndicator(val isCancelled) : isCancelled(std::move(isCancelled)) {}
+      bool UserBreak() override { return isCancelled().as<bool>(); }
+      void Show(const Message_ProgressScope&, const bool) override {}
+
+    private:
+      val isCancelled;
+    };
+
+    struct TopoDSCasts {};
+
+    template <typename T, const T& (*to)(const TopoDS_Shape&)>
+    static T cast(const TopoDS_Shape& shape) {
+      return to(shape);
+    }
+
+    static int shapeHash(const TopoDS_Shape& shape, int upper) {
+      if (upper < 1) throw Standard_RangeError("shapeHash: upper must be positive");
+      return static_cast<int>(std::hash<TopoDS_Shape>{}(shape) % static_cast<size_t>(upper));
+    }
+
+    EMSCRIPTEN_BINDINGS(RockettHelpers) {
+      function("versionId", &versionId);
+      function("extendedToUtf8", &extendedToUtf8);
+      function("labelName", &labelName);
+      function("setLabelName", &setLabelName);
+      function("readStepBytes", &readStepBytes<STEPControl_Reader>);
+      function("readStepCafBytes", &readStepBytes<STEPCAFControl_Reader>);
+      function("upcastCurve", &upcastCurve);
+      function("shapeHash", &shapeHash);
+      class_<CancelIndicator>("CancelIndicator")
+        .constructor<val>()
+        .function("Start", optional_override([](CancelIndicator& self) { return self.Start(); }));
+      class_<TopoDSCasts>("TopoDS")
+        .class_function("Vertex_1", &cast<TopoDS_Vertex, TopoDS::Vertex>)
+        .class_function("Edge_1", &cast<TopoDS_Edge, TopoDS::Edge>)
+        .class_function("Wire_1", &cast<TopoDS_Wire, TopoDS::Wire>)
+        .class_function("Face_1", &cast<TopoDS_Face, TopoDS::Face>)
+        .class_function("Shell_1", &cast<TopoDS_Shell, TopoDS::Shell>)
+        .class_function("Solid_1", &cast<TopoDS_Solid, TopoDS::Solid>);
+    }
+
+additionalCppCode: |
+  class OCJS {
+  public:
+    static Standard_Failure* getStandard_FailureData(intptr_t exceptionPtr) {
+      return reinterpret_cast<Standard_Failure*>(exceptionPtr);
+    }
+  };
