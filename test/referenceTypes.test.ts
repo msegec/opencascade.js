@@ -1,9 +1,14 @@
 import initOpenCascade, { OpenCascadeInstance } from "opencascade.js/dist/node.js"
+import ocFull from "opencascade.js/dist/opencascade.full.js";
+import { fileURLToPath } from "url";
 
 let oc: OpenCascadeInstance = undefined;
 
 beforeAll(async () => {
-  oc = await initOpenCascade();
+  oc = await initOpenCascade({
+    mainJS: ocFull,
+    mainWasm: fileURLToPath(new URL("../dist/opencascade.full.wasm", import.meta.url)),
+  });
 });
 
 it("can handle js reference types for cpp reference types (numbers)", () => {

@@ -4,7 +4,10 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest"
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "test:fast": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.tiers.cjs --selectProjects fast",
+    "test:slow": "NODE_OPTIONS=--experimental-vm-modules jest --config jest.tiers.cjs --selectProjects slow",
+    "smoke:rockett": "node smoke-rockett.mts"
   },
   "keywords": [],
   "author": "",

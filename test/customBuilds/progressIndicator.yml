@@ -33,7 +33,7 @@ mainBuild:
       EMSCRIPTEN_WRAPPER(Message_ProgressIndicator_JSWrapper);
       void Show(const Message_ProgressScope& theScope, const Standard_Boolean isForce) {
         val valTheScope = val::object();
-        valTheScope.set("current", &theScope);
+        valTheScope.set("current", &theScope, allow_raw_pointers());
         return call<void>("Show", valTheScope, isForce);
       }
       Standard_Boolean UserBreak() {

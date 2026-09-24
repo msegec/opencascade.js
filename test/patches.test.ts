@@ -1,10 +1,15 @@
 import initOpenCascade, { OpenCascadeInstance } from "opencascade.js/dist/node.js"
+import ocFull from "opencascade.js/dist/opencascade.full.js";
 import * as fs from "fs";
+import { fileURLToPath } from "url";
 
 let oc: OpenCascadeInstance = undefined;
 
 beforeAll(async () => {
-  oc = await initOpenCascade();
+  oc = await initOpenCascade({
+    mainJS: ocFull,
+    mainWasm: fileURLToPath(new URL("../dist/opencascade.full.wasm", import.meta.url)),
+  });
 });
 
 it("can read .iges files (make sure that getpwuid error is not thrown)", () => {

@@ -1,9 +1,14 @@
 import initOpenCascade, { OpenCascadeInstance } from "opencascade.js/dist/node.js";
+import ocFull from "opencascade.js/dist/opencascade.full.js";
+import { fileURLToPath } from "url";
 
 let oc: OpenCascadeInstance = undefined;
 
 beforeAll(async () => {
-  oc = await initOpenCascade();
+  oc = await initOpenCascade({
+    mainJS: ocFull,
+    mainWasm: fileURLToPath(new URL("../dist/opencascade.full.wasm", import.meta.url)),
+  });
 });
 
 // Takes a TDocStd_Document, creates a GLB file from it and returns a ObjectURL
@@ -54,7 +59,7 @@ it("Can run \"OpenCascade.js Logo\" example", () => {
     const tf = new oc.gp_Trsf_1();
     tf.SetTranslation_1(new oc.gp_Vec_4(translation[0], translation[1], translation[2]));
     tf.SetScaleFactor(scale);
-    const loc = new oc.TopLoc_Location_2(tf);
+    const loc = new oc.TopLoc_Location_4(tf);
 
     const cut = new oc.BRepAlgoAPI_Cut_3(shape, sphere.Shape().Moved(loc, false), new oc.Message_ProgressRange_1());
     cut.Build(new oc.Message_ProgressRange_1());
@@ -71,8 +76,8 @@ it("Can run \"OpenCascade.js Logo\" example", () => {
   // Rotate around the Z axis
   const makeRotation = (rotation) => {
     const tf = new oc.gp_Trsf_1();
-    tf.SetRotation_1(new oc.gp_Ax1_2(new oc.gp_Pnt_1(), new oc.gp_Dir_4(0, 0, 1)), rotation);
-    const loc = new oc.TopLoc_Location_2(tf);
+    tf.SetRotation_1(new oc.gp_Ax1_2(new oc.gp_Pnt_1(), new oc.gp_Dir_5(0, 0, 1)), rotation);
+    const loc = new oc.TopLoc_Location_4(tf);
     return loc;
   };
 
@@ -139,7 +144,7 @@ it("Can run \"Bottle\" example", () => {
   const aTrsf = new oc.gp_Trsf_1();
 
   aTrsf.SetMirror_2(xAxis);
-  const aBRepTrsf = new oc.BRepBuilderAPI_Transform_2(aWire.Wire(), aTrsf, false);
+  const aBRepTrsf = new oc.BRepBuilderAPI_Transform_2(aWire.Wire(), aTrsf, false, false);
   const aMirroredShape = aBRepTrsf.Shape();
 
   const mkWire = new oc.BRepBuilderAPI_MakeWire_1();
@@ -166,7 +171,7 @@ it("Can run \"Bottle\" example", () => {
   // Body : Add the Neck
   const neckLocation = new oc.gp_Pnt_3(0, 0, height);
   const neckAxis = oc.gp.DZ();
-  const neckAx2 = new oc.gp_Ax2_3(neckLocation, neckAxis);
+  const neckAx2 = new oc.gp_Ax2_4(neckLocation, neckAxis);
 
   const myNeckRadius = 5;
   const myNeckHeight = 5;
@@ -206,7 +211,7 @@ it("Can run \"Bottle\" example", () => {
 
   // Threading : Define 2D Curves
   const aPnt = new oc.gp_Pnt2d_3(2. * Math.PI, myNeckHeight / 2.);
-  const aDir = new oc.gp_Dir2d_4(2. * Math.PI, myNeckHeight / 4.);
+  const aDir = new oc.gp_Dir2d_5(2. * Math.PI, myNeckHeight / 4.);
   const anAx2d = new oc.gp_Ax2d_2(aPnt, aDir);
 
   const aMajor = 2. * Math.PI;
@@ -221,7 +226,7 @@ it("Can run \"Bottle\" example", () => {
   const tmp2 = anEllipse1.Value(Math.PI);
   const anEllipsePnt2 = new oc.gp_Pnt2d_3(tmp2.X(), tmp2.Y());
 
-  const aSegment = new oc.GCE2d_MakeSegment_1(anEllipsePnt1, anEllipsePnt2);
+  const aSegment = new oc.GC_MakeSegment2d_1(anEllipsePnt1, anEllipsePnt2);
   // Threading : Build Edges and Wires
   const anEdge1OnSurf1 = new oc.BRepBuilderAPI_MakeEdge_30(new oc.Handle_Geom2d_Curve_2(anArc1), new oc.Handle_Geom_Surface_2(aCyl1));
   const anEdge2OnSurf1 = new oc.BRepBuilderAPI_MakeEdge_30(new oc.Handle_Geom2d_Curve_2(aSegment.Value().get()), new oc.Handle_Geom_Surface_2(aCyl1));
@@ -251,8 +256,8 @@ it("Can run \"Bottle\" example", () => {
 
   // Rotate our finished bottle upright
   const tf = new oc.gp_Trsf_1();
-  tf.SetRotation_1(new oc.gp_Ax1_2(new oc.gp_Pnt_1(), new oc.gp_Dir_4(1, 0, 0)), -Math.PI / 2);
-  const loc = new oc.TopLoc_Location_2(tf);
+  tf.SetRotation_1(new oc.gp_Ax1_2(new oc.gp_Pnt_1(), new oc.gp_Dir_5(1, 0, 0)), -Math.PI / 2);
+  const loc = new oc.TopLoc_Location_4(tf);
 
   visualizeShapes(oc, aRes.Moved(loc, false));
 });
@@ -271,10 +276,12 @@ it("Can run \"Polygon\" example", () => {
 });
 
 it("Can catch exceptions", async () => {
+  expect.assertions(1);
   try {
     new oc.BRepPrimAPI_MakeCone_1(1, 0.5, 0);
   } catch (e) {
-    expect(oc.OCJS.getStandard_FailureData(e).GetMessageString()).toBe("cone with negative or null height");
+    expect(oc.getExceptionMessage(e)).toEqual(["Standard_DomainError", "cone with negative or null height"]);
+    oc.decrementExceptionRefcount(e);
   }
 });
 
