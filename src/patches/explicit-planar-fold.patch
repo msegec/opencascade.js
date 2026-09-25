@@ -1,0 +1,17 @@
+--- /occt-original/src/ModelingAlgorithms/TKFillet/ChFi3d/ChFi3d_Builder_1.cxx
++++ /occt/src/ModelingAlgorithms/TKFillet/ChFi3d/ChFi3d_Builder_1.cxx
+@@ -911,7 +911,13 @@
+   }
+   //  Modified by Sergey KHROMOV - Fri Dec 21 17:46:22 2001 End
+   // if(BRep_Tool::Continuity(Ec,ff1,ff2) != GeomAbs_C0) return 0;
+-  if (ChFi3d::IsTangentFaces(Ec, ff1, ff2))
++  BRepAdaptor_Surface aFirstSurface(ff1);
++  BRepAdaptor_Surface aSecondSurface(ff2);
++  const bool isPlanarFold = aFirstSurface.GetType() == GeomAbs_Plane
++                         && aSecondSurface.GetType() == GeomAbs_Plane
++                         && !aFirstSurface.Plane().Axis().Direction().IsParallel(
++                           aSecondSurface.Plane().Axis().Direction(), 1.e-4);
++  if (!isPlanarFold && ChFi3d::IsTangentFaces(Ec, ff1, ff2))
+   {
+     return false;
+   }
