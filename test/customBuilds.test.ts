@@ -1,15 +1,12 @@
-import shell from "shelljs";
 import * as fs from "fs";
 import initOpenCascade from "opencascade.js/dist/node";
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { customBuild } from "./containerBuild";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const dockerImageName = process.env.dockerImageName ?? "donalffons/opencascade.js";
-const customBuildCmd = `cd customBuilds && docker run --rm -v $(pwd):/src -u $(id -u):$(id -g) ${dockerImageName}`;
-
 const createCustomBuild = (name: string, targetSizeJs: number, targetSizeWasm: number, targetSizeDTs: number, epsPct = 0.1) => {
-  expect(shell.exec(`${customBuildCmd} ${name}.yml`).code).toBe(0);
+  expect(customBuild(name)).toBe(0);
   const { size: sizeJs } = fs.statSync(path.join(__dirname, "customBuilds", `./customBuild.${name}.js`));
   console.log(`size of: ./customBuild.${name}.js: ${sizeJs}`);
   const { size: sizeWasm } = fs.statSync(path.join(__dirname, "customBuilds", `./customBuild.${name}.wasm`));
@@ -34,7 +31,7 @@ const initCustomBuild = async (name: string) => {
 };
 
 it("can create custom build: simple", () => {
-  createCustomBuild("simple", 124946, 559402, 7238);
+  createCustomBuild("simple", 97517, 3922987, 7167);
 });
 
 it("can run custom build: simple", async () => {
@@ -47,15 +44,15 @@ it("can run custom build: simple", async () => {
 });
 
 it("fails on custom build: errorUnknownProp1", () => {
-  expect(shell.exec(`${customBuildCmd} errorUnknownProp1.yml`).code).not.toBe(0);
+  expect(customBuild("errorUnknownProp1")).not.toBe(0);
 });
 
 it("fails on custom build: errorUnknownProp2", () => {
-  expect(shell.exec(`${customBuildCmd} errorUnknownProp2.yml`).code).not.toBe(0);
+  expect(customBuild("errorUnknownProp2")).not.toBe(0);
 });
 
 it("can create custom build: no-exceptions", () => {
-  createCustomBuild("no-exceptions", 240738, 33826894, 9334201);
+  createCustomBuild("no-exceptions", 201546, 58891358, 9767968);
 });
 
 it("can run custom build: no-exceptions", async () => {

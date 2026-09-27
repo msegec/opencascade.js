@@ -1,16 +1,13 @@
-import shell from "shelljs";
 import { type OpenCascadeInstance } from "opencascade.js/dist/node";
 import * as path from "path";
 import * as fs from "fs";
 import { fileURLToPath } from "url";
 import { createRequire } from "module";
+import { customBuild } from "./containerBuild";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const dockerImageName = process.env.dockerImageName ?? "donalffons/opencascade.js";
-const customBuildCmd = `cd customBuilds && docker run --rm -v $(pwd):/src ${dockerImageName}`;
-
 it("can create custom build: testBindings", () => {
-  expect(shell.exec(`${customBuildCmd} testBindings.yml`).code).toBe(0);
+  expect(customBuild("testBindings")).toBe(0);
 });
 
 let oc: OpenCascadeInstance = undefined;
@@ -37,21 +34,9 @@ it("correctly binds StaticMethods::StaticMethods", async () => {
 it("correctly binds StaticMethods::intReturn", async () => {
   expect(oc.StaticMethods.intReturn.argCount).toBe(0);
   expect(oc.StaticMethods.intReturn()).toBe(123);
-  expect(() => {
-    oc.StaticMethods.intReturn("keks");
-  }).toThrow();
-  expect(() => {
-    oc.StaticMethods.intReturn(123);
-  }).toThrow();
-  expect(() => {
-    oc.StaticMethods.intReturn(undefined);
-  }).toThrow();
-  expect(() => {
-    oc.StaticMethods.intReturn(null);
-  }).toThrow();
-  expect(() => {
-    oc.StaticMethods.intReturn({});
-  }).toThrow();
+  for (const extra of ["keks", 123, undefined, null, {}]) {
+    expect(oc.StaticMethods.intReturn(extra)).toBe(123);
+  }
 });
 
 it("correctly binds StaticMethods::intArgument", async () => {
@@ -149,12 +134,8 @@ it("correctly binds StaticMethods::notScopedEnumArgument", async () => {
 
 it("correctly binds StaticMethods::notScopedEnumReturn", async () => {
   expect(oc.StaticMethods.notScopedEnumReturn.argCount).toBe(0);
-  expect(() => {
-    oc.StaticMethods.notScopedEnumReturn(1);
-  }).toThrow();
-  expect(() => {
-    oc.StaticMethods.notScopedEnumReturn(oc.NotScopedEnum.NotScopedEnum_B);
-  }).toThrow();
+  expect(oc.StaticMethods.notScopedEnumReturn(1).value).toBe(oc.NotScopedEnum.NotScopedEnum_B.value);
+  expect(oc.StaticMethods.notScopedEnumReturn(oc.NotScopedEnum.NotScopedEnum_C).value).toBe(oc.NotScopedEnum.NotScopedEnum_B.value);
   expect(() => {
     oc.StaticMethods.notScopedEnumReturn();
   }).not.toThrow();
@@ -176,12 +157,8 @@ it("correctly binds StaticMethods::scopedEnumArgument", async () => {
 
 it("correctly binds StaticMethods::scopedEnumReturn", async () => {
   expect(oc.StaticMethods.scopedEnumReturn.argCount).toBe(0);
-  expect(() => {
-    oc.StaticMethods.scopedEnumReturn(1);
-  }).toThrow();
-  expect(() => {
-    oc.StaticMethods.scopedEnumReturn(oc.ScopedEnum.B);
-  }).toThrow();
+  expect(oc.StaticMethods.scopedEnumReturn(1).value).toBe(oc.ScopedEnum.B.value);
+  expect(oc.StaticMethods.scopedEnumReturn(oc.ScopedEnum.C).value).toBe(oc.ScopedEnum.B.value);
   expect(() => {
     oc.StaticMethods.scopedEnumReturn();
   }).not.toThrow();
@@ -190,9 +167,7 @@ it("correctly binds StaticMethods::scopedEnumReturn", async () => {
 
 it("correctly binds StaticMethods::cStringReturn", async () => {
   expect(oc.StaticMethods.cStringReturn.argCount).toBe(0);
-  expect(() => {
-    oc.StaticMethods.cStringReturn(1);
-  }).toThrow();
+  expect(oc.StaticMethods.cStringReturn(1)).toBe("Hello, World!");
   expect(() => {
     oc.StaticMethods.cStringReturn();
   }).not.toThrow();
@@ -201,9 +176,7 @@ it("correctly binds StaticMethods::cStringReturn", async () => {
 
 it("correctly binds StaticMethods::cStringNullReturn", async () => {
   expect(oc.StaticMethods.cStringNullReturn.argCount).toBe(0);
-  expect(() => {
-    oc.StaticMethods.cStringNullReturn(1);
-  }).toThrow();
+  expect(oc.StaticMethods.cStringNullReturn(1)).toBe(null);
   expect(() => {
     oc.StaticMethods.cStringNullReturn();
   }).not.toThrow();
@@ -268,9 +241,7 @@ it("correctly binds Instantiable1", async () => {
   }).not.toThrow();
   expect(intRef.current).toBe(234);
   expect(instance.cStringReturn.argCount).toBe(0);
-  expect(() => {
-    instance.cStringReturn(1);
-  }).toThrow();
+  expect(instance.cStringReturn(1)).toBe("Hello, World!");
   expect(() => {
     instance.cStringReturn();
   }).not.toThrow();

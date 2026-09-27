@@ -1,19 +1,18 @@
-import shell from "shelljs";
 import initOpenCascade, { OpenCascadeInstance } from "opencascade.js/dist/node";
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { jest } from "@jest/globals";
+import { customBuild, requireThreading } from "./containerBuild";
 jest.setTimeout(10000);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dockerImageName = process.env.dockerImageName ?? "donalffons/opencascade.js";
-const customBuildCmd = `cd customBuilds && docker run --rm -v $(pwd):/src -u $(id -u):$(id -g) ${dockerImageName.indexOf(":") ? `${dockerImageName}` : dockerImageName}`;
 
 const it_ = process.env.skipMultiThreaded ? it.skip : it;
 
+beforeAll(() => requireThreading("multi-threaded"));
+
 it_("can create custom build: multi-threaded", () => {
-  expect(shell.exec(`${customBuildCmd} multi-threaded.yml`).code).toBe(0);
-  shell.mv("customBuilds/customBuild.multi-threaded.worker.js", "customBuilds/customBuild.multi-threaded.worker.cjs"); // stop jest from crying about cjs modules
+  expect(customBuild("multi-threaded")).toBe(0);
 });
 
 let mainJs: any = undefined;
@@ -24,7 +23,6 @@ it_("can load custom build: multi-threaded", async () => {
   oc = await initOpenCascade({
     mainJS: mainJs.default,
     mainWasm: path.join(__dirname, "customBuilds", "customBuild.multi-threaded.wasm"),
-    worker: path.join(__dirname, "customBuilds", "customBuild.multi-threaded.worker.cjs"),
   });
   expect((oc as any).wasmMemory.buffer).toBeInstanceOf(SharedArrayBuffer);
 });

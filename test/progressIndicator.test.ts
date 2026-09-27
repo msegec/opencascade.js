@@ -1,17 +1,15 @@
-import shell from "shelljs";
 import initOpenCascade, { OpenCascadeInstance } from "opencascade.js/dist/node";
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { jest } from "@jest/globals";
+import { customBuild } from "./containerBuild";
 
 jest.setTimeout(10000);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dockerImageName = process.env.dockerImageName ?? "donalffons/opencascade.js";
-const customBuildCmd = `cd customBuilds && docker run --rm -v $(pwd):/src -u $(id -u):$(id -g) ${dockerImageName}`;
 
 it("can create custom build: progressIndicator", () => {
-  expect(shell.exec(`${customBuildCmd} progressIndicator.yml`).code).toBe(0);
+  expect(customBuild("progressIndicator")).toBe(0);
 });
 
 let mainJs: any = undefined;

@@ -15,13 +15,18 @@ mainBuild:
     - symbol: BRep_Builder
     - symbol: TopoDS_Builder
   emccFlags:
-    # These are just the default values as defined in /src/customBuildSchema.py
+    # The default values from /src/customBuildSchema.py, plus wasmMemory and
+    # PThread in EXPORTED_RUNTIME_METHODS for the test.
+    - -flto
+    - -fwasm-exceptions
     - -O3
+    - -Wl,-mllvm,-wasm-enable-eh
     - -sEXPORT_ES6=1
-    - -sEXPORTED_RUNTIME_METHODS=['FS']
+    - -sEXPORTED_RUNTIME_METHODS=['FS','HEAP8','HEAPU8','getExceptionMessage','getCppExceptionThrownObjectFromWebAssemblyException','decrementExceptionRefcount','wasmMemory','PThread']
     - -sINITIAL_MEMORY=100MB
     - -sMAXIMUM_MEMORY=4GB
     - -sALLOW_MEMORY_GROWTH=1
+    - -sSTACK_SIZE=5MB
     - --no-entry
 
     # Currently, the thread pool size has to be defined at compile time, otherwise

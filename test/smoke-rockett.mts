@@ -1,6 +1,14 @@
 import initOpenCascade from "../dist/node.js";
 import type { TopoDS_Shape, TopAbs_ShapeEnum } from "../dist/node.js";
 
+declare global {
+  namespace WebAssembly {
+    class Exception {
+      is(tag: unknown): boolean;
+    }
+  }
+}
+
 const started = performance.now();
 const oc = await initOpenCascade({ module: { print: () => {} } });
 const bootMs = performance.now() - started;
@@ -63,7 +71,7 @@ const nonAscii = "Träger ø12 螺丝";
 check("versionId", () => {
   const { occt, commit } = oc.versionId();
   assert(/^\d+\.\d+\.\d+/.test(occt), `occt ${occt}`);
-  assert(commit.length > 0, "empty commit");
+  assert(/^[0-9a-f]{40}$/.test(commit), `commit ${commit}`);
   console.log(`     occt ${occt}, commit ${commit}`);
 });
 
