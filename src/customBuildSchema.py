@@ -19,68 +19,45 @@ emccFlags = {
   ],
 }
 
+build = {
+  "bindings": {
+    "required": False,
+    "type": "list",
+    "schema": {
+      "type": "dict",
+      "schema": {
+        "symbol": {
+          "required": True,
+          "type": "string",
+        },
+      },
+    },
+    "default": [],
+  },
+  "emccFlags": emccFlags,
+  "name": {
+    "required": True,
+    "type": "string",
+  },
+  "additionalBindCode": {
+    "required": False,
+    "type": "string",
+    "default": "",
+  },
+}
+
 schema = {
   "mainBuild": {
     "required": True,
     "type": "dict",
-    "schema": {
-      "bindings": {
-        "required": False,
-        "type": "list",
-        "schema": {
-          "type": "dict",
-          "schema": {
-            "symbol": {
-              "required": True,
-              "type": "string",
-            },
-          },
-        },
-        "default": [],
-      },
-      "emccFlags": emccFlags,
-      "name": {
-        "required": True,
-        "type": "string",
-      },
-      "additionalBindCode": {
-        "required": False,
-        "type": "string",
-        "default": "",
-      },
-    },
+    "schema": build,
   },
   "extraBuilds": {
     "required": False,
     "type": "list",
     "schema": {
       "type": "dict",
-      "schema": {
-        "bindings": {
-          "required": False,
-          "type": "list",
-          "schema": {
-            "type": "dict",
-            "schema": {
-              "symbol": {
-                "required": True,
-                "type": "string",
-              },
-            },
-          },
-          "default": [],
-        },
-        "emccFlags": emccFlags,
-        "additionalBindCode": {
-          "required": False,
-          "type": "string",
-          "default": "",
-        },
-        "name": {
-          "required": True,
-          "type": "string",
-        },
-      },
+      "schema": build,
     },
     "default": [],
   },

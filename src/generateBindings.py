@@ -8,7 +8,7 @@ import errno
 from filter.filterTypedefs import filterTypedef
 from filter.filterEnums import filterEnum
 from wasmGenerator.Common import ignoreDuplicateTypedef, SkipException
-from Common import ocIncludeFiles, includePathArgs
+from Common import occtHeaders, clangIncludeFlags
 from preamble import writePreamble
 import json
 import multiprocessing
@@ -19,7 +19,7 @@ from functools import partial, lru_cache
 libraryBasePath = "/opencascade.js/build/bindings"
 buildDirectory = "/opencascade.js/build"
 occtBasePath = "/occt/src/"
-ocIncludeStatements = os.linesep.join(map(lambda x: "#include \"" + os.path.basename(x) + "\"", list(sorted(ocIncludeFiles))))
+ocIncludeStatements = os.linesep.join(map(lambda x: "#include \"" + os.path.basename(x) + "\"", list(sorted(occtHeaders()))))
 handleTypedefsFile = occtBasePath + "Handle_Typedefs.hxx"
 
 def mkdirp(name: str) -> None:
@@ -219,7 +219,7 @@ def parseFiles(files):
       "-stdlib=libc++",
       "-D__EMSCRIPTEN__",
       "-DOCCT_NO_DEPRECATED",
-    ] + includePathArgs,
+    ] + clangIncludeFlags(),
     files
   )
 
@@ -227,6 +227,10 @@ def parseFiles(files):
     print("Diagnostic Messages:")
     for d in translationUnit.diagnostics:
       print("  " + d.format())
+
+  errors = [d.format() for d in translationUnit.diagnostics if d.severity >= clang.cindex.Diagnostic.Error]
+  if errors:
+    raise Exception("Clang reported " + str(len(errors)) + " error diagnostic(s) while parsing:\n  " + "\n  ".join(errors))
 
   return translationUnit
 
@@ -288,22 +292,12 @@ referenceTypeTemplateDefs = \
   "\n"
 
 def generateCustomCodeBindings(customCode):
-  try:
-    os.makedirs(libraryBasePath)
-  except Exception:
-    pass
-
   embindPreamble = writePreamble(libraryBasePath + "/myMain.h", ocIncludeStatements + "\n" + handleTypedefs() + referenceTypeTemplateDefs + "\n" + customCode)
 
   process(".cpp", embindGenerationFuncClasses, embindGenerationFuncTemplates, embindGenerationFuncEnums, embindPreamble, customCode, True)
   process(".d.ts.json", typescriptGenerationFuncClasses, typescriptGenerationFuncTemplates, typescriptGenerationFuncEnums, "", customCode, True)
 
 if __name__ == "__main__":
-  try:
-    os.makedirs(libraryBasePath)
-  except Exception:
-    pass
-
   embindPreamble = writePreamble(libraryBasePath, ocIncludeStatements + "\n" + handleTypedefs() + referenceTypeTemplateDefs)
   process(".cpp", embindGenerationFuncClasses, embindGenerationFuncTemplates, embindGenerationFuncEnums, embindPreamble, "", False)
 

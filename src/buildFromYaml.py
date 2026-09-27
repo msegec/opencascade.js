@@ -11,45 +11,18 @@ from compileBindings import compileCustomCodeBindings
 import shutil
 from cerberus import Validator
 from argparse import ArgumentParser
-from Common import ocIncludePaths, additionalIncludePaths, compileFlags, threadingFlags
+from Common import includeFlags, compileFlags, threadingFlags
 from customBuildSchema import schema
-
-parser = ArgumentParser()
-parser.add_argument(dest="filename", help="Custom build input file (.yml)", metavar="FILE.yml")
-args = parser.parse_args()
 
 libraryBasePath = "/opencascade.js/build"
 
-buildConfig = yaml.safe_load(open(args.filename, "r"))
-v = Validator(schema)
-if not v.validate(buildConfig, schema):
-  raise Exception(v.errors)
-buildConfig = v.normalized(buildConfig)
+def walkFiles(root):
+  return sorted(dirpath + "/" + item for dirpath, dirnames, filenames in os.walk(root) for item in filenames)
 
-try:
-  shutil.rmtree(libraryBasePath + "/bindings/myMain.h")
-except Exception:
-  pass
-
-generateCustomCodeBindings(buildConfig["additionalCppCode"])
-compileCustomCodeBindings({
-  "threading": os.environ['threading'],
-})
-
-builtSymbols = set()
-for dirpath, dirnames, filenames in os.walk(libraryBasePath + "/bindings"):
-  for item in filenames:
-    if item.endswith(".cpp.o"):
-      builtSymbols.add(item[:-6])
-
-def verifyBindings(bindings) -> None:
+def verifyBindings(bindings, builtSymbols) -> None:
   for binding in bindings:
     if not binding["symbol"] in builtSymbols:
       raise Exception("Requested binding " + json.dumps(binding) + " does not exist!")
-
-verifyBindings(buildConfig["mainBuild"]["bindings"])
-for extraBuild in buildConfig["extraBuilds"]:
-  verifyBindings(extraBuild["bindings"])
 
 def shouldProcessSymbol(symbol: str, bindings) -> bool:
   if len(bindings) == 0:
@@ -59,20 +32,10 @@ def shouldProcessSymbol(symbol: str, bindings) -> bool:
     return True
   return False
 
-typescriptDefinitions = []
-for dirpath, dirnames, filenames in os.walk(libraryBasePath + "/bindings"):
-  for item in filenames:
-    if item.endswith(".d.ts.json") and shouldProcessSymbol(item[:-10], list(chain(buildConfig["mainBuild"]["bindings"], *list(map(lambda x: x["bindings"], buildConfig["extraBuilds"]))))):
-      f = open(dirpath + "/" + item, "r")
-      typescriptDefinitions.append(json.loads(f.read()))
-
-def runBuild(build):
+def runBuild(build, bindingFiles):
   def getAdditionalBindCodeO():
     if "additionalBindCode" in build:
-      try:
-        os.mkdir(libraryBasePath + "/additionalBindCode")
-      except Exception:
-        pass
+      os.makedirs(libraryBasePath + "/additionalBindCode", exist_ok=True)
       additionalBindCodeFileName = libraryBasePath + "/additionalBindCode/" + build["name"] + ".cpp"
       f = open(additionalBindCodeFileName, "w")
       f.write(build["additionalBindCode"])
@@ -81,7 +44,7 @@ def runBuild(build):
       command = [
         "emcc",
         *compileFlags(os.environ["threading"]),
-        *list(map(lambda x: "-I" + x, ocIncludePaths + additionalIncludePaths)),
+        *includeFlags(),
         "-c", additionalBindCodeFileName,
       ]
       subprocess.check_call([
@@ -93,20 +56,10 @@ def runBuild(build):
       return None
   additionalBindCodeO = getAdditionalBindCodeO()
   print("Running build: " + build["name"])
-  bindingsO = []
-  for dirpath, dirnames, filenames in os.walk(libraryBasePath + "/bindings"):
-    for item in filenames:
-      if item.endswith(".cpp.o") and shouldProcessSymbol(item[:-6], build["bindings"]):
-        bindingsO.append(dirpath + "/" + item)
-  sourcesO = []
-  for dirpath, dirnames, filenames in os.walk(libraryBasePath + "/sources"):
-    for item in filenames:
-      if item in [
-        "XBRepMesh.o",
-      ]:
-        continue
-      if item.endswith(".o"):
-        sourcesO.append(dirpath + "/" + item)
+  bindingsO = [x for x in bindingFiles if x.endswith(".cpp.o") and shouldProcessSymbol(os.path.basename(x)[:-6], build["bindings"])]
+  sourcesO = [x for x in walkFiles(libraryBasePath + "/sources") if x.endswith(".o") and not os.path.basename(x) in [
+    "XBRepMesh.o",
+  ]]
   subprocess.check_call([
     "em++", "-lembind", *([] if additionalBindCodeO is None else [additionalBindCodeO]),
     *bindingsO, *sourcesO,
@@ -116,11 +69,7 @@ def runBuild(build):
   ])
   print("Build finished")
 
-runBuild(buildConfig["mainBuild"])
-for extraBuild in buildConfig["extraBuilds"]:
-  runBuild(extraBuild)
-
-if buildConfig["generateTypescriptDefinitions"]:
+def writeTypescriptDefinitions(typescriptDefinitions, mainBuildName):
   typescriptDefinitionOutput = ""
   typescriptExports = []
   for dts in typescriptDefinitions:
@@ -290,5 +239,46 @@ if buildConfig["generateTypescriptDefinitions"]:
     "declare function init(): Promise<OpenCascadeInstance>;\n\n" + \
     "export default init;\n"
 
-  typescriptDefinitionsFile = open(os.getcwd() + "/" + os.path.splitext(buildConfig["mainBuild"]["name"])[0] + ".d.ts", "w")
-  typescriptDefinitionsFile.write(typescriptDefinitionOutput)
+  with open(os.getcwd() + "/" + os.path.splitext(mainBuildName)[0] + ".d.ts", "w") as f:
+    f.write(typescriptDefinitionOutput)
+
+if __name__ == "__main__":
+  parser = ArgumentParser()
+  parser.add_argument(dest="filename", help="Custom build input file (.yml)", metavar="FILE.yml")
+  args = parser.parse_args()
+
+  with open(args.filename, "r") as f:
+    buildConfig = yaml.safe_load(f)
+  v = Validator(schema)
+  if not v.validate(buildConfig, schema):
+    raise Exception(v.errors)
+  buildConfig = v.normalized(buildConfig)
+
+  customBindingsPath = libraryBasePath + "/bindings/myMain.h"
+  if os.path.exists(customBindingsPath):
+    shutil.rmtree(customBindingsPath)
+
+  if buildConfig["additionalCppCode"]:
+    generateCustomCodeBindings(buildConfig["additionalCppCode"])
+    compileCustomCodeBindings({
+      "threading": os.environ['threading'],
+    })
+
+  bindingFiles = walkFiles(libraryBasePath + "/bindings")
+  builtSymbols = set(os.path.basename(x)[:-6] for x in bindingFiles if x.endswith(".cpp.o"))
+  builds = [buildConfig["mainBuild"], *buildConfig["extraBuilds"]]
+  for build in builds:
+    verifyBindings(build["bindings"], builtSymbols)
+
+  for build in builds:
+    runBuild(build, bindingFiles)
+
+  if buildConfig["generateTypescriptDefinitions"]:
+    requestedBindings = list(chain(*(build["bindings"] for build in builds)))
+    typescriptDefinitions = []
+    for file in bindingFiles:
+      item = os.path.basename(file)
+      if item.endswith(".d.ts.json") and shouldProcessSymbol(item[:-10], requestedBindings):
+        with open(file, "r") as f:
+          typescriptDefinitions.append(json.loads(f.read()))
+    writeTypescriptDefinitions(typescriptDefinitions, buildConfig["mainBuild"]["name"])

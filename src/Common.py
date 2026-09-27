@@ -1,5 +1,5 @@
 from filter.filterIncludeFiles import filterIncludeFile
-from typing import Set
+from functools import cache
 import os
 
 occtBasePath = "/occt/src/"
@@ -23,30 +23,31 @@ def compileFlags(threading):
     *threadingFlags(threading),
   ]
 
-def getGlobalIncludes() -> Set[str]:
-  includeFiles = list()
-  additionalIncludePaths = list()
+@cache
+def occtHeadersAndDirs():
+  headers = []
+  dirs = []
   for dirpath, dirnames, filenames in os.walk(occtBasePath):
     dirnames[:] = [x for x in dirnames if x != "GTests"]
-    additionalIncludePaths.append(str(dirpath))
-    for item in filenames:
-      if filterIncludeFile(item):
-        includeFiles.append(str(os.path.join(dirpath, item)))
-  return [includeFiles, additionalIncludePaths]
+    dirs.append(dirpath)
+    headers.extend(os.path.join(dirpath, x) for x in filenames if filterIncludeFile(x))
+  return headers, dirs
 
-[ocIncludeFiles, ocIncludePaths] = getGlobalIncludes()
+def occtHeaders():
+  return occtHeadersAndDirs()[0]
 
-additionalIncludePaths = [
-  "/rapidjson/include",
-]
+def includeFlags():
+  return ["-I" + x for x in occtHeadersAndDirs()[1] + ["/rapidjson/include"]]
 
-includePathArgs = \
-  list(dict.fromkeys(map(lambda x: "-I" + x, ocIncludePaths))) + \
-  list(map(lambda x: "-I" + x, [
-    "/emsdk/upstream/emscripten/cache/sysroot/include/compat/",
-    "/emsdk/upstream/emscripten/cache/sysroot/include/c++/v1/",
-    "/emsdk/upstream/lib/clang/" + next(os.walk('/emsdk/upstream/lib/clang/'))[1][0] + "/include/",
-    "/emsdk/upstream/emscripten/cache/sysroot/include/",
-  ])) + \
-  list(map(lambda x: "-I" + x, ocIncludePaths + additionalIncludePaths))
-  
+@cache
+def clangIncludeFlags():
+  clangVersion = next(os.walk("/emsdk/upstream/lib/clang/"))[1][0]
+  return \
+    list(dict.fromkeys("-I" + x for x in occtHeadersAndDirs()[1])) + \
+    ["-I" + x for x in [
+      "/emsdk/upstream/emscripten/cache/sysroot/include/compat/",
+      "/emsdk/upstream/emscripten/cache/sysroot/include/c++/v1/",
+      "/emsdk/upstream/lib/clang/" + clangVersion + "/include/",
+      "/emsdk/upstream/emscripten/cache/sysroot/include/",
+    ]] + \
+    includeFlags()

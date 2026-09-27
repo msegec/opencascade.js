@@ -664,6 +664,8 @@ class TypescriptBindings(Bindings):
     value = optionalValueType(res)
     if value is not None:
       return self.getTypescriptDefFromResultType(value, templateDecl, templateArgs) + " | undefined"
+    if isCString(res):
+      return "string"
     if not res.spelling == "void":
       typedefType = self.getTypedefedTemplateTypeAsString(typeSpelling(res).replace("&", "").replace("const", "").replace("*", "").strip(), templateDecl, templateArgs)
       resTypeName = typedefType.replace("&", "").replace("const", "").replace("*", "").strip()
@@ -680,7 +682,9 @@ class TypescriptBindings(Bindings):
     argTypeName = self.getTypedefedTemplateTypeAsString(typeSpelling(arg.type).replace("&", "").replace("const", "").replace("*", "").strip(), templateDecl, templateArgs)
     argTypeName = argTypeName.replace("&", "").replace("const", "").replace("*", "").strip()
     argTypeName = self.convertBuiltinTypes(argTypeName)
-    if optionalValueType(arg.type) is not None:
+    if isCString(arg.type):
+      argTypeName = "string"
+    elif optionalValueType(arg.type) is not None:
       argTypeName = self.getTypescriptDefFromResultType(optionalValueType(arg.type), templateDecl, templateArgs) + " | undefined"
     elif argTypeName == "" or "(" in argTypeName or ":" in argTypeName:
       print("could not generate proper types for type name '" + argTypeName + "', using 'any' instead.")
@@ -730,7 +734,8 @@ class TypescriptBindings(Bindings):
     output = ""
     bindingsOutput = "export declare type " + theEnum.spelling + " = {\n"
     for enumChild in list(theEnum.get_children()):
-      bindingsOutput += "  " + enumChild.spelling + ": {};\n"
+      bindingsOutput += "  " + enumChild.spelling + ": " + theEnum.spelling + ";\n"
+    bindingsOutput += "  readonly value: number;\n"
     bindingsOutput += "}\n\n"
     output += bindingsOutput
     self.exports.append(theEnum.spelling)

@@ -1,5 +1,36 @@
 mainBuild:
   name: opencascade.full.js
+  additionalBindCode: |
+    #include <TopoDS.hxx>
+    #include <TopoDS_CompSolid.hxx>
+    #include <TopoDS_Compound.hxx>
+    #include <TopoDS_Edge.hxx>
+    #include <TopoDS_Face.hxx>
+    #include <TopoDS_Shell.hxx>
+    #include <TopoDS_Solid.hxx>
+    #include <TopoDS_Vertex.hxx>
+    #include <TopoDS_Wire.hxx>
+    #include <emscripten/bind.h>
+    using namespace emscripten;
+
+    struct TopoDSCasts {};
+
+    template <typename T, const T& (*to)(const TopoDS_Shape&)>
+    static T cast(const TopoDS_Shape& shape) {
+      return to(shape);
+    }
+
+    EMSCRIPTEN_BINDINGS(TopoDSCasts) {
+      class_<TopoDSCasts>("TopoDS")
+        .class_function("Vertex_1", &cast<TopoDS_Vertex, TopoDS::Vertex>)
+        .class_function("Edge_1", &cast<TopoDS_Edge, TopoDS::Edge>)
+        .class_function("Wire_1", &cast<TopoDS_Wire, TopoDS::Wire>)
+        .class_function("Face_1", &cast<TopoDS_Face, TopoDS::Face>)
+        .class_function("Shell_1", &cast<TopoDS_Shell, TopoDS::Shell>)
+        .class_function("Solid_1", &cast<TopoDS_Solid, TopoDS::Solid>)
+        .class_function("CompSolid_1", &cast<TopoDS_CompSolid, TopoDS::CompSolid>)
+        .class_function("Compound_1", &cast<TopoDS_Compound, TopoDS::Compound>);
+    }
 
 additionalCppCode: |
   class OCJS {

@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 import os
-from Common import ocIncludePaths, additionalIncludePaths, compileFlags
+from Common import includeFlags, compileFlags
 from preamble import preamblePath
 import subprocess
 import multiprocessing
@@ -26,7 +26,7 @@ def compileBindings(root, threading):
   command = [
     "emcc",
     *compileFlags(threading),
-    *list(map(lambda x: "-I" + x, ocIncludePaths + additionalIncludePaths)),
+    *includeFlags(),
   ]
   pch = preamblePath(root) + "." + threading + ".pch"
   print("building " + pch)

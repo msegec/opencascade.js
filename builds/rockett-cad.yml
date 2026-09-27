@@ -10,7 +10,6 @@
 mainBuild:
   name: opencascade.rockett.js
   bindings:
-    - symbol: OCJS
     - symbol: Adaptor3d_Curve
     - symbol: Adaptor3d_Surface
     - symbol: BRepAdaptor_Curve
@@ -391,11 +390,3 @@ mainBuild:
         .class_function("Shell_1", &cast<TopoDS_Shell, TopoDS::Shell>)
         .class_function("Solid_1", &cast<TopoDS_Solid, TopoDS::Solid>);
     }
-
-additionalCppCode: |
-  class OCJS {
-  public:
-    static Standard_Failure* getStandard_FailureData(intptr_t exceptionPtr) {
-      return reinterpret_cast<Standard_Failure*>(exceptionPtr);
-    }
-  };

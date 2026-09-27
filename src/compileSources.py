@@ -4,7 +4,7 @@ import os
 import re
 import subprocess
 import multiprocessing
-from Common import compileFlags, additionalIncludePaths
+from Common import compileFlags, includeFlags
 
 from filter.filterSourceFiles import filterSourceFile
 from filter.filterPackages import filterPackages
@@ -37,20 +37,13 @@ libraryBasePath = "/opencascade.js/build/sources"
 
 sourceBasePath = "/occt/src/"
 
-includePaths = list(additionalIncludePaths)
-for dirpath, dirnames, filenames in os.walk(os.path.join(sourceBasePath)):
-  includePaths.append(dirpath)
-
 def buildObjectFiles(file, args):
   relativeFile = file.replace(sourceBasePath, "")
-  try:
-    os.makedirs(libraryBasePath + "/" + os.path.dirname(relativeFile))
-  except Exception:
-    pass
+  os.makedirs(libraryBasePath + "/" + os.path.dirname(relativeFile), exist_ok=True)
   command = [
     "emcc",
     *compileFlags(args["threading"]),
-    *list(map(lambda x: "-I" + x, includePaths)),
+    *includeFlags(),
     "-c",
     file,
   ]
@@ -92,10 +85,7 @@ if __name__ == "__main__":
   parser.add_argument(dest="threading", choices=["single-threaded", "multi-threaded"], help="Build in single vs. multi-threaded mode")
   args = parser.parse_args()
 
-  try:
-    os.makedirs(libraryBasePath)
-  except Exception:
-    pass
+  os.makedirs(libraryBasePath, exist_ok=True)
 
   def myBuildFunction(x):
     buildObjectFiles(x, {
