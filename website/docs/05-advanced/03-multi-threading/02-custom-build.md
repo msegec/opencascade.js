@@ -54,7 +54,7 @@ import opencascadeWasm from "./openascade.full.wasm";
 // import opencascadeWorker from "./openascade.full.worker.js";
 
 initOpenCascade({
-  mainJs: opencascade,
+  mainJS: opencascade,
   mainWasm: opencascadeWasm,
   worker: "/path/to/opencascade.full.worker.js", // or pass opencascadeWorker (containing a string with the path to the worker)
 }).then(oc => {

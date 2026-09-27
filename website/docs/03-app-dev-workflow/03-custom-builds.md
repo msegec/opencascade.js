@@ -93,7 +93,7 @@ Custom builds are defined using YAML files. One YAML file can contain multiple m
       import opencascadeWasm from 'rocketExample.wasm';
 
       initOpenCascade({
-        mainJs: opencascade,
+        mainJS: opencascade,
         mainWasm: opencascadeWasm,
       }).then(oc => {
         // Custom build is ready to use!
