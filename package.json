@@ -7,6 +7,19 @@
   "license": "LGPL-2.1-only",
   "repository": "github:msegec/opencascade.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist/index.js",
+    "dist/index.d.ts",
+    "dist/node.js",
+    "dist/node.d.ts",
+    "dist/rockett-helpers.d.ts",
+    "dist/opencascade.rockett.js",
+    "dist/opencascade.rockett.wasm",
+    "dist/opencascade.rockett.d.ts"
+  ],
+  "scripts": {
+    "test": "npm --prefix test run smoke:rockett && npm --prefix test run test:fast"
+  },
   "peerDependencies": {
     "ws": "^8.5.0"
   },

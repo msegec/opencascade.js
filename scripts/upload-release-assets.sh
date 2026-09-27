@@ -3,41 +3,45 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: scripts/upload-release-assets.sh TAG [--apply] [--image IMAGE]
+Usage: scripts/upload-release-assets.sh TAG CANDIDATE_DIR [--apply]
 
-Attaches the current build to an existing GitHub release of
-msegec/opencascade.js. Dry run by default: packs and lists the assets,
-uploads nothing.
+Attaches a build from scripts/build-rockett-candidate.sh CANDIDATE_DIR to an
+existing GitHub release of msegec/opencascade.js. Dry run by default: stages
+and lists the assets, uploads nothing.
 
-Assets: the npm tarball (npm pack), every dist/opencascade.*.{js,wasm,d.ts},
-build-info.txt (image id and digest, emsdk base digest, OCCT commit, git
-commit) and SHA256SUMS. --apply uploads them with gh release upload
---clobber and appends the build info to the release notes once.
+Assets: every file the candidate's SHA256SUMS lists (npm tarball and kernel),
+the candidate's build-time build-info.txt, and SHA256SUMS over all of them.
+--apply uploads them with gh release upload --clobber and appends the build
+info to the release notes once.
 
 Refuses when the release does not exist (creating one is a publication and
 is Mark's call), when TAG is not v<package.json version>, when HEAD is not
-the tagged commit, when build inputs have uncommitted changes, or when a
-dist artifact predates the build image.
-IMAGE defaults to localhost/opencascade.js:<version>, then :latest.
+the tagged commit, when build inputs have uncommitted changes, when the
+candidate has no build-info.txt or its Source commit is not the tagged
+commit, or when a candidate file no longer matches its build-time hash.
 EOF
 }
 
 gh_repo=msegec/opencascade.js
 tag=
+candidate=
 mode=dry-run
-image=
 while (($#)); do
   case $1 in
     --apply) mode=apply ;;
     --dry-run) mode=dry-run ;;
-    --image) image=${2:?--image needs a reference}; shift ;;
     -h | --help) usage; exit 0 ;;
     -*) usage >&2; exit 2 ;;
-    *) tag=$1 ;;
+    *)
+      if [[ -z $tag ]]; then tag=$1
+      elif [[ -z $candidate ]]; then candidate=$1
+      else usage >&2; exit 2
+      fi ;;
   esac
   shift
 done
-[[ -n $tag ]] || { usage >&2; exit 2; }
+[[ -n $tag && -n $candidate ]] || { usage >&2; exit 2; }
+candidate=$(realpath -m -- "$candidate")
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"
@@ -51,36 +55,19 @@ tag_commit=$(git rev-parse --verify --quiet "$tag^{commit}") || fail "tag $tag i
 [[ $tag_commit == $(git rev-parse HEAD) ]] || fail "HEAD is not $tag; check out the tagged commit and rebuild"
 [[ -z $(git status --porcelain -- Dockerfile src builds dist package.json .npmignore) ]] || fail "build inputs have uncommitted changes"
 
-if [[ -z $image ]]; then
-  for ref in "localhost/opencascade.js:$version" localhost/opencascade.js:latest; do
-    podman image exists "$ref" && { image=$ref; break; }
-  done
-fi
-[[ -n $image ]] || fail "no build image found; pass --image"
-
-shopt -s nullglob
-dist=(dist/opencascade.*.js dist/opencascade.*.wasm dist/opencascade.*.d.ts)
-((${#dist[@]})) || fail "no dist/opencascade.* artifacts; build first"
-image_created=$(podman image inspect --format '{{.Created.Unix}}' "$image")
-for f in "${dist[@]}"; do
-  (($(stat -c %Y "$f") >= image_created)) || fail "$f predates $image; rebuild dist from it"
-done
+[[ -f $candidate/build-info.txt ]] || fail "$candidate/build-info.txt is missing; build with scripts/build-rockett-candidate.sh"
+built_commit=$(sed -n 's/^Source commit: //p' "$candidate/build-info.txt")
+[[ $built_commit == "$tag_commit" ]] || fail "candidate was built from '${built_commit:-unknown}', not $tag ($tag_commit)"
+[[ -f $candidate/SHA256SUMS ]] || fail "$candidate/SHA256SUMS is missing"
+(cd "$candidate" && sha256sum --check --strict --quiet SHA256SUMS) || fail "candidate files do not match their build-time SHA256SUMS"
 
 stage=$(mktemp -d "${TMPDIR:-/tmp}/ocjs-release-XXXXXX")
 trap 'rm -rf -- "$stage"' EXIT
 
-npm pack --ignore-scripts --silent --pack-destination "$stage" >/dev/null
-cp -- "${dist[@]}" "$stage/"
-
-{
-  echo "Build image: $image"
-  podman image inspect --format 'Image id: {{.Id}}
-Image digest: {{.Digest}}
-Image created: {{.Created}}' "$image"
-  echo "emsdk base: $(sed -n 's/^FROM \([^ ]*\) AS base-image$/\1/p' Dockerfile)"
-  echo "OCCT commit: $(sed -n 's/^ENV OCCT_COMMIT_HASH_FULL=//p' Dockerfile)"
-  echo "Git commit: $tag_commit"
-} >"$stage/build-info.txt"
+while read -r _ name; do
+  cp -- "$candidate/$name" "$stage/"
+done <"$candidate/SHA256SUMS"
+cp -- "$candidate/build-info.txt" "$stage/"
 
 (cd "$stage" && sha256sum -- * >SHA256SUMS)
 
