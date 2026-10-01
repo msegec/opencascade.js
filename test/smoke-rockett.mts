@@ -75,6 +75,12 @@ check("versionId", () => {
   console.log(`     occt ${occt}, commit ${commit}`);
 });
 
+check("retained OCJS exception helper", () => {
+  const helper = new oc.OCJS();
+  assert(oc.OCJS.getStandard_FailureData(0) === null, "null exception pointer");
+  helper.delete();
+});
+
 check("meshFace", () => {
   const unmeshed = oc.TopoDS.Face_1(shapes(new oc.BRepPrimAPI_MakeBox_2(1, 1, 1).Shape(), S.TopAbs_FACE)[0]!);
   assert(oc.meshFace(unmeshed) === null, "unmeshed face should give null");

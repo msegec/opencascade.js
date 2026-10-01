@@ -175,6 +175,7 @@ mainBuild:
     - symbol: Handle_XCAFDoc_ShapeTool
     - symbol: IGESControl_Writer
     - symbol: NCollection_BaseSequence
+    - symbol: OCJS
     - symbol: PCDM_ReaderFilter
     - symbol: Quantity_Color
     - symbol: Quantity_TypeOfColor
@@ -397,3 +398,11 @@ mainBuild:
         .class_function("Shell_1", &cast<TopoDS_Shell, TopoDS::Shell>)
         .class_function("Solid_1", &cast<TopoDS_Solid, TopoDS::Solid>);
     }
+
+additionalCppCode: |
+  class OCJS {
+  public:
+    static Standard_Failure* getStandard_FailureData(intptr_t exceptionPtr) {
+      return reinterpret_cast<Standard_Failure*>(exceptionPtr);
+    }
+  };
