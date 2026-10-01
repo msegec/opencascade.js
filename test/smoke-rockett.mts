@@ -257,13 +257,14 @@ check("exact ellipse construction and recovery", () => {
 
 check("exact rational, trimmed and periodic B-splines", () => {
   const poles = new oc.TColgp_Array1OfPnt_2(1, 3);
-  (
-    [
-      [1, 0],
-      [1, 1],
-      [0, 1],
-    ] satisfies [number, number][]
-  ).forEach(([x, y], i) => poles.SetValue_1(i + 1, pnt(x, y, 0)));
+  const rationalCoordinates: [number, number][] = [
+    [1, 0],
+    [1, 1],
+    [0, 1],
+  ];
+  rationalCoordinates.forEach(([x, y], i) =>
+    poles.SetValue_1(i + 1, pnt(x, y, 0)),
+  );
   const weights = new oc.TColStd_Array1OfReal_2(1, 3);
   [1, Math.SQRT1_2, 1].forEach((w, i) => weights.SetValue_1(i + 1, w));
   const knots = new oc.TColStd_Array1OfReal_2(1, 2);
@@ -306,14 +307,15 @@ check("exact rational, trimmed and periodic B-splines", () => {
     "trimmed rational weight",
   );
   const periodicPoles = new oc.TColgp_Array1OfPnt_2(1, 4);
-  (
-    [
-      [1, 0],
-      [0, 1],
-      [-1, 0],
-      [0, -1],
-    ] satisfies [number, number][]
-  ).forEach(([x, y], i) => periodicPoles.SetValue_1(i + 1, pnt(x, y, 0)));
+  const periodicCoordinates: [number, number][] = [
+    [1, 0],
+    [0, 1],
+    [-1, 0],
+    [0, -1],
+  ];
+  periodicCoordinates.forEach(([x, y], i) =>
+    periodicPoles.SetValue_1(i + 1, pnt(x, y, 0)),
+  );
   const periodicKnots = new oc.TColStd_Array1OfReal_2(1, 5);
   const periodicMults = new oc.TColStd_Array1OfInteger_2(1, 5);
   [0, 1, 2, 3, 4].forEach((u, i) => {
