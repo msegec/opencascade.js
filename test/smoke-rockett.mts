@@ -246,6 +246,105 @@ check("gp_Torus", () => {
   near(torus.Area(), 12 * Math.PI ** 2, "area");
 });
 
+check("exact ellipse construction and recovery", () => {
+  const ellipse = new oc.gp_Elips_2(new oc.gp_Ax2_1(), 10, 5);
+  const maker = new oc.BRepBuilderAPI_MakeEdge_12(ellipse);
+  assert(maker.IsDone(), "ellipse edge failed");
+  const recovered = new oc.BRepAdaptor_Curve_2(maker.Edge()).Ellipse();
+  near(recovered.MajorRadius(), 10, "ellipse major radius");
+  near(recovered.MinorRadius(), 5, "ellipse minor radius");
+});
+
+check("exact rational, trimmed and periodic B-splines", () => {
+  const poles = new oc.TColgp_Array1OfPnt_2(1, 3);
+  (
+    [
+      [1, 0],
+      [1, 1],
+      [0, 1],
+    ] satisfies [number, number][]
+  ).forEach(([x, y], i) => poles.SetValue_1(i + 1, pnt(x, y, 0)));
+  const weights = new oc.TColStd_Array1OfReal_2(1, 3);
+  [1, Math.SQRT1_2, 1].forEach((w, i) => weights.SetValue_1(i + 1, w));
+  const knots = new oc.TColStd_Array1OfReal_2(1, 2);
+  const mults = new oc.TColStd_Array1OfInteger_2(1, 2);
+  [0, 1].forEach((u, i) => {
+    knots.SetValue_1(i + 1, u);
+    mults.SetValue_1(i + 1, 3);
+  });
+  const spline = new oc.Geom_BSplineCurve_2(
+    poles,
+    weights,
+    knots,
+    mults,
+    2,
+    false,
+    true,
+  );
+  const handle = new oc.Handle_Geom_Curve_2(spline);
+  const maker = new oc.BRepBuilderAPI_MakeEdge_24(handle);
+  assert(maker.IsDone(), "rational edge failed");
+  const adaptor = new oc.BRepAdaptor_Curve_2(maker.Edge());
+  const recovered = adaptor.BSpline().get();
+  assert(
+    recovered.IsRational() && recovered.Degree() === 2,
+    "rational curve changed",
+  );
+  near(recovered.Weight(2), Math.SQRT1_2, "rational weight");
+  near(adaptor.Value(0.5).X(), Math.SQRT1_2, "rational midpoint x");
+  near(adaptor.Value(0.5).Y(), Math.SQRT1_2, "rational midpoint y");
+  const trim = new oc.Geom_TrimmedCurve(handle, 0.2, 0.8, true, false);
+  const trimHandle = oc.upcastCurve(new oc.Handle_Geom_TrimmedCurve_2(trim));
+  const trimMaker = new oc.BRepBuilderAPI_MakeEdge_24(trimHandle);
+  assert(trimMaker.IsDone(), "trimmed edge failed");
+  const trimAdaptor = new oc.BRepAdaptor_Curve_2(trimMaker.Edge());
+  near(trimAdaptor.FirstParameter(), 0.2, "trim start");
+  near(trimAdaptor.LastParameter(), 0.8, "trim end");
+  near(
+    trimAdaptor.BSpline().get().Weight(2),
+    Math.SQRT1_2,
+    "trimmed rational weight",
+  );
+  const periodicPoles = new oc.TColgp_Array1OfPnt_2(1, 4);
+  (
+    [
+      [1, 0],
+      [0, 1],
+      [-1, 0],
+      [0, -1],
+    ] satisfies [number, number][]
+  ).forEach(([x, y], i) => periodicPoles.SetValue_1(i + 1, pnt(x, y, 0)));
+  const periodicKnots = new oc.TColStd_Array1OfReal_2(1, 5);
+  const periodicMults = new oc.TColStd_Array1OfInteger_2(1, 5);
+  [0, 1, 2, 3, 4].forEach((u, i) => {
+    periodicKnots.SetValue_1(i + 1, u);
+    periodicMults.SetValue_1(i + 1, 1);
+  });
+  const periodic = new oc.Geom_BSplineCurve_1(
+    periodicPoles,
+    periodicKnots,
+    periodicMults,
+    2,
+    true,
+  );
+  const periodicMaker = new oc.BRepBuilderAPI_MakeEdge_24(
+    new oc.Handle_Geom_Curve_2(periodic),
+  );
+  assert(periodicMaker.IsDone(), "periodic edge failed");
+  const periodicAdaptor = new oc.BRepAdaptor_Curve_2(periodicMaker.Edge());
+  const periodicRecovered = periodicAdaptor.BSpline().get();
+  assert(
+    periodicRecovered.IsPeriodic() && periodicRecovered.IsClosed(),
+    "periodic closure lost",
+  );
+  near(periodicRecovered.Period(), 4, "period");
+  near(
+    periodicRecovered.Value(0.25).Distance(periodicRecovered.Value(4.25)),
+    0,
+    "periodic evaluation",
+  );
+});
+
 const totalMs = performance.now() - started;
 console.log(`boot ${bootMs.toFixed(0)} ms, total ${totalMs.toFixed(0)} ms, ${failures.length} failed`);
 if (failures.length > 0) process.exit(1);

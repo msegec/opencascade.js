@@ -67,11 +67,13 @@ mainBuild:
     - symbol: GC_MakeArcOfCircle
     - symbol: GC_Root
     - symbol: GProp_GProps
+    - symbol: GeomAbs_BSplKnotDistribution
     - symbol: GeomAbs_CurveType
     - symbol: GeomAbs_JoinType
     - symbol: GeomAbs_SurfaceType
     - symbol: GeomAdaptor_TransformedCurve
     - symbol: GeomAdaptor_TransformedSurface
+    - symbol: Geom_BSplineCurve
     - symbol: Geom_BoundedCurve
     - symbol: Geom_Curve
     - symbol: Geom_ElementarySurface
@@ -80,6 +82,7 @@ mainBuild:
     - symbol: Geom_Surface
     - symbol: Geom_TrimmedCurve
     - symbol: Handle_BRepTools_History
+    - symbol: Handle_Geom_BSplineCurve
     - symbol: Handle_Geom_Curve
     - symbol: Handle_Geom_Geometry
     - symbol: Handle_Geom_Surface
@@ -122,6 +125,7 @@ mainBuild:
     - symbol: gp_Ax2
     - symbol: gp_Ax3
     - symbol: gp_Circ
+    - symbol: gp_Elips
     - symbol: gp_Cylinder
     - symbol: gp_Dir
     - symbol: gp_Pln
@@ -134,6 +138,9 @@ mainBuild:
     - symbol: gp_Vec2d
     # helpers
     - symbol: STEPCAFControl_Reader
+    - symbol: TColStd_Array1OfInteger
+    - symbol: TColStd_Array1OfReal
+    - symbol: TColgp_Array1OfPnt
     - symbol: TCollection_ExtendedString
     - symbol: TDF_Label
     # planned: open rows that need these before server/src uses them
