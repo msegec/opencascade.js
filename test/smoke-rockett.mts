@@ -353,6 +353,117 @@ check("exact rational, trimmed and periodic B-splines", () => {
   );
 });
 
+function ulps(a: number, b: number) {
+  const view = new DataView(new ArrayBuffer(8));
+  const ordered = (x: number) => {
+    view.setFloat64(0, x);
+    const bits = view.getBigInt64(0);
+    return bits < 0n ? -(bits & 0x7fffffffffffffffn) : bits;
+  };
+  const d = ordered(a) - ordered(b);
+  return d < 0n ? -d : d;
+}
+
+check("BinTools round trips of a sweep: ranges exact, directions within 1 ulp, then bit-identical", () => {
+  const axis = new oc.gp_Ax1_2(pnt(-1, 0, 0), new oc.gp_Dir_5(0, 0, 1));
+  const profile = shapes(box, S.TopAbs_FACE)[0]!;
+  const cold = new oc.BRepPrimAPI_MakeRevol_1(profile, axis, Math.PI / 2, false).Shape();
+  assert(cold.ShapeType() === S.TopAbs_SOLID, "sweep is not a solid");
+  const write = (shape: TopoDS_Shape) => {
+    assert(oc.BinTools.Write_3(shape, "/smoke.bin", range()), "BinTools write");
+    const bytes = oc.FS.readFile("/smoke.bin");
+    oc.FS.unlink("/smoke.bin");
+    return bytes;
+  };
+  const read = (bytes: Uint8Array) => {
+    oc.FS.writeFile("/smoke.bin", bytes);
+    const shape = new oc.TopoDS_Shape();
+    assert(oc.BinTools.Read_2(shape, "/smoke.bin", range()), "BinTools read");
+    oc.FS.unlink("/smoke.bin");
+    return shape;
+  };
+  const first = read(write(cold));
+  const edges = (shape: TopoDS_Shape) =>
+    shapes(shape, S.TopAbs_EDGE).flatMap((shape) => {
+      const edge = oc.TopoDS.Edge_1(shape);
+      const curve = new oc.BRepAdaptor_Curve_2(edge);
+      return [curve.FirstParameter(), curve.LastParameter(), oc.BRep_Tool.Tolerance_2(edge)];
+    });
+  const coldEdges = edges(cold);
+  const firstEdges = edges(first);
+  assert(coldEdges.includes(Math.PI / 2), "no quarter-turn edge range");
+  assert(
+    firstEdges.length === coldEdges.length && firstEdges.every((x, i) => Object.is(x, coldEdges[i])),
+    "edge ranges or tolerances differ",
+  );
+  const xyz = (d: { X(): number; Y(): number; Z(): number }) => [d.X(), d.Y(), d.Z()];
+  const axes = (a: { Direction(): any; XDirection(): any; YDirection(): any }) =>
+    [a.Direction(), a.XDirection(), a.YDirection()].flatMap(xyz);
+  const directions = (shape: TopoDS_Shape) => [
+    ...shapes(shape, S.TopAbs_FACE).flatMap((face) => {
+      const surface = new oc.BRepAdaptor_Surface_2(oc.TopoDS.Face_1(face), true);
+      const type = surface.GetType();
+      if (type === oc.GeomAbs_SurfaceType.GeomAbs_Plane) return axes(surface.Plane().Position());
+      if (type === oc.GeomAbs_SurfaceType.GeomAbs_Cylinder) return axes(surface.Cylinder().Position());
+      throw new Error(`unexpected surface ${type.value}`);
+    }),
+    ...shapes(shape, S.TopAbs_EDGE).flatMap((edge) => {
+      const curve = new oc.BRepAdaptor_Curve_2(oc.TopoDS.Edge_1(edge));
+      const type = curve.GetType();
+      if (type === oc.GeomAbs_CurveType.GeomAbs_Line) return xyz(curve.EvalDN(curve.FirstParameter(), 1));
+      if (type === oc.GeomAbs_CurveType.GeomAbs_Circle) return axes(curve.Circle().Position());
+      throw new Error(`unexpected curve ${type.value}`);
+    }),
+    ...shapes(shape, S.TopAbs_EDGE).flatMap((edge) => {
+      const found: number[] = [];
+      for (let i = 1; ; i++) {
+        const pcurve = new oc.Handle_Geom2d_Curve_1();
+        const surface = new oc.Handle_Geom_Surface_1();
+        oc.BRep_Tool.CurveOnSurface_4(oc.TopoDS.Edge_1(edge), pcurve, surface, new oc.TopLoc_Location_1(), 0, 0, i);
+        if (pcurve.IsNull()) return found;
+        const tangent = pcurve.get().EvalDN(0, 1);
+        const bend = pcurve.get().EvalDN(0, 2);
+        found.push(tangent.X(), tangent.Y(), bend.X(), bend.Y());
+      }
+    }),
+  ];
+  const coldDirections = directions(cold);
+  const firstDirections = directions(first);
+  assert(firstDirections.length === coldDirections.length, "direction count differs");
+  const worst = coldDirections.reduce((most, x, i) => {
+    const d = ulps(x, firstDirections[i]!);
+    return d > most ? d : most;
+  }, 0n);
+  assert(worst <= 1n, `direction drift ${worst} ulps`);
+  const firstBytes = write(first);
+  const secondBytes = write(read(firstBytes));
+  assert(
+    secondBytes.length === firstBytes.length && secondBytes.every((b, i) => b === firstBytes[i]),
+    "second round trip bytes differ",
+  );
+});
+
+check("BRepFilletAPI_MakeFillet.Add_5 with radii at points", () => {
+  const radii = new oc.TColgp_Array1OfPnt2d_2(1, 2);
+  radii.SetValue_1(1, new oc.gp_Pnt2d_3(0, 0.2));
+  radii.SetValue_1(2, new oc.gp_Pnt2d_3(1, 0.4));
+  near(radii.Value(2).Y(), 0.4, "stored radius");
+  const edge = shapes(box, S.TopAbs_EDGE)
+    .map((shape) => oc.TopoDS.Edge_1(shape))
+    .find((edge) => {
+      const curve = new oc.BRepAdaptor_Curve_2(edge);
+      return curve.LastParameter() - curve.FirstParameter() === 1;
+    });
+  assert(edge, "no unit edge");
+  const fillet = new oc.BRepFilletAPI_MakeFillet(box, oc.ChFi3d_FilletShape.ChFi3d_Rational);
+  fillet.Add_5(radii, edge);
+  fillet.Build(range());
+  assert(fillet.IsDone(), "fillet not done");
+  const props = new oc.GProp_GProps_1();
+  oc.BRepGProp.VolumeProperties_1(fillet.Shape(), props, false, false, false);
+  assert(props.Mass() < 6, `volume ${props.Mass()}`);
+});
+
 const totalMs = performance.now() - started;
 console.log(`boot ${bootMs.toFixed(0)} ms, total ${totalMs.toFixed(0)} ms, ${failures.length} failed`);
 if (failures.length > 0) process.exit(1);
